@@ -17,7 +17,7 @@ const DATA_FILE = path.join(ROOT, 'data.json');
 
 const CARD_MIN = 1, CARD_MAX = 10;
 const KNOWN_LOW_CHANCE = 0.65, KNOWN_LOW_MAX = 5;
-const MATCH_SECONDS = 300;
+const MATCH_SECONDS = 60;
 const SELECT_MS = 3600, BEAT_MS = 420, REVEAL_MS = 620, RESOLVE_MS = 1300;
 const PBKDF2_ITERATIONS = 150000;
 const QUEUE_WAIT_MS = 30000;   // hunt for real players this long, then fill with bots

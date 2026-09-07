@@ -3,7 +3,6 @@
 
 const CARD_MIN = 1;
 const CARD_MAX = 10;
-const MATCH_SECONDS = 300;
 
 // Hidden tuning, never surfaced in the UI: the card you can SEE skews low, so the
 // blind card stays tempting and the choice keeps its tension.

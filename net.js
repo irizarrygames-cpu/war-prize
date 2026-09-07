@@ -265,6 +265,7 @@ function startOnlineMatch(info) {
     suddenWinner: null,
     pendingEnd: false,
     endsAt: performance.now() + info.seconds * 1000,
+    totalSeconds: info.seconds,
     lastShown: info.seconds,
     timers: [],
     stats: { prizeCards: 0, wonLowCard: false, reachedSudden: false },
