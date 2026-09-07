@@ -576,20 +576,6 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%,
 .sb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-score { font-weight: 900; font-size: 17px; font-variant-numeric: tabular-nums; }
 
-#finalMinute {
-  position: absolute;
-  top: 32%;
-  z-index: 20;
-  font-size: clamp(36px, 8vw, 78px);
-  font-weight: 900;
-  letter-spacing: 4px;
-  color: var(--bad);
-  -webkit-text-stroke: 7px var(--outline);
-  paint-order: stroke fill;
-  animation: bannerIn 0.4s ease-out;
-  pointer-events: none;
-}
-
 /* --- table (flat, straight-on) --- */
 
 #table {

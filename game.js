@@ -712,13 +712,6 @@ function tickClock() {
   $('matchTimer').textContent = `${mm}:${ss}`;
 
   if (remain !== M.lastShown) {
-    // Pointless on a short match -- it would fire the moment the match began.
-    if (remain === 60 && M.totalSeconds > 90) {
-      $('finalMinute').classList.remove('hidden');
-      SFX.finalMinute();
-      SFX.setMusicRate(1.35);
-      setTimeout(() => $('finalMinute').classList.add('hidden'), 2200);
-    }
     if (remain <= 10 && remain > 0) {
       $('matchTimer').classList.add('urgent');
       $('matchTimer').classList.remove('pulse');

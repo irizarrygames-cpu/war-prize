@@ -121,9 +121,6 @@ const SFX = (() => {
         tone({ freq: f, type: 'square', dur: 0.18, vol: 0.22, delay: i * 0.07 }));
     },
     nobody() { tone({ freq: 300, type: 'sine', dur: 0.4, vol: 0.2, slideTo: 120 }); },
-    finalMinute() {
-      [880, 880, 1100].forEach((f, i) => tone({ freq: f, type: 'square', dur: 0.18, vol: 0.25, delay: i * 0.16 }));
-    },
     tick(n) {
       tone({ freq: n <= 3 ? 1100 : 820, type: 'square', dur: 0.09, vol: 0.28 });
     },

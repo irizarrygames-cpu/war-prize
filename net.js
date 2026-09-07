@@ -265,7 +265,6 @@ function startOnlineMatch(info) {
     suddenWinner: null,
     pendingEnd: false,
     endsAt: performance.now() + info.seconds * 1000,
-    totalSeconds: info.seconds,
     lastShown: info.seconds,
     timers: [],
     stats: { prizeCards: 0, wonLowCard: false, reachedSudden: false },
@@ -275,7 +274,6 @@ function startOnlineMatch(info) {
   const ar = arenaFor(SAVE.trophies);
   $('arenaBg').className = 'arena-bg-' + ar.n;
   $('table').className = 'tbl-' + SAVE.equipped.table;
-  $('finalMinute').classList.add('hidden');
   $('suddenDeath').classList.add('hidden');
   $('matchTimer').classList.remove('urgent');
   $('prizeCount').classList.add('hidden');
