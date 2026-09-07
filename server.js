@@ -1,0 +1,904 @@
+// War Prize multiplayer server. Zero dependencies -- plain Node.
+//
+//   node server.js [port]
+//
+// Serves the game and runs accounts, friends, invites and live 1v1 matches.
+// The server deals the cards and decides the winner; clients are never trusted
+// with either, and a player is only ever sent their own two candidates.
+
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+const PORT = Number(process.argv[2] || process.env.PORT || 8421);
+const ROOT = __dirname;
+const DATA_FILE = path.join(ROOT, 'data.json');
+
+const CARD_MIN = 1, CARD_MAX = 10;
+const KNOWN_LOW_CHANCE = 0.65, KNOWN_LOW_MAX = 5;
+const MATCH_SECONDS = 300;
+const SELECT_MS = 3600, BEAT_MS = 420, REVEAL_MS = 620, RESOLVE_MS = 1300;
+const PBKDF2_ITERATIONS = 150000;
+const QUEUE_WAIT_MS = 30000;   // hunt for real players this long, then fill with bots
+
+const MODES = {
+  duel:  { players: 2 },
+  trio:  { players: 3 },
+  party: { players: 4 },
+};
+
+const ARENA_THRESHOLDS = [0, 300, 700, 1200, 1800, 2500, 3300, 4200, 5200, 6500];
+const BOT_WEAKNESS_ARENA_1 = 0.52, BOT_WEAKNESS_ARENA_10 = 0.04, BOT_WEAKNESS_SPREAD = 0.10;
+
+// Bots must be indistinguishable from real players, so they get usernames built the
+// same way people build theirs and avatars from the same set the game offers.
+const BOT_NAME_A = ['ace', 'blitz', 'cyber', 'dark', 'echo', 'frost', 'ghost', 'hyper',
+  'iron', 'jet', 'lunar', 'neon', 'onyx', 'pixel', 'rapid', 'storm', 'turbo', 'vortex',
+  'wolf', 'zen', 'crimson', 'shadow', 'atomic', 'silver'];
+const BOT_NAME_B = ['bolt', 'claw', 'dash', 'edge', 'fang', 'gale', 'hawk', 'jinx',
+  'kite', 'lynx', 'mist', 'nova', 'pulse', 'rush', 'shade', 'spark', 'tide', 'viper',
+  'wave', 'zap'];
+const AVATARS = ['🐉', '🦊', '🐼', '👽', '👑', '🐸', '💀', '🌟', '🐻', '🐰', '🤖', '🦁', '🐺', '🦈'];
+
+const MOODS = {
+  hype:  { win: '🔥', lose: '😭', upset: '😱', nobody: '😂' },
+  cocky: { win: '😂', lose: '😡', upset: '😡', nobody: '😡' },
+  chill: { win: '🔥', lose: '😂', upset: '😱', nobody: '😂' },
+  salty: { win: '😂', lose: '💀', upset: '💀', nobody: '💀' },
+};
+const MOOD_KEYS = Object.keys(MOODS);
+
+function pickOne(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function makeBotIdentity(taken) {
+  for (let i = 0; i < 50; i++) {
+    let name = pickOne(BOT_NAME_A) + pickOne(BOT_NAME_B);
+    if (Math.random() < 0.35) name += randInt(2, 99);
+    name = name.slice(0, 14).toUpperCase();
+    // never clash with a seat already taken, or with a real account's name
+    if (!taken.has(name) && !getUser(name.toLowerCase())) {
+      taken.add(name);
+      return { name, avatar: pickOne(AVATARS), mood: pickOne(MOOD_KEYS) };
+    }
+  }
+  return { name: 'PLAYER' + randInt(100, 999), avatar: pickOne(AVATARS), mood: pickOne(MOOD_KEYS) };
+}
+
+function arenaNumberFor(trophies) {
+  let n = 1;
+  ARENA_THRESHOLDS.forEach((t, i) => { if (trophies >= t) n = i + 1; });
+  return n;
+}
+
+function botWeaknessFor(arenaN) {
+  const t = (Math.min(Math.max(arenaN, 1), 10) - 1) / 9;
+  return BOT_WEAKNESS_ARENA_1 + t * (BOT_WEAKNESS_ARENA_10 - BOT_WEAKNESS_ARENA_1);
+}
+
+/* ---------------- storage ---------------- */
+
+let DB = { users: {} };
+try {
+  DB = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  DB.users = DB.users || {};
+} catch (e) {
+  // first run
+}
+
+let saveTimer = null;
+function saveDB() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    fs.writeFile(DATA_FILE + '.tmp', JSON.stringify(DB), err => {
+      if (!err) fs.rename(DATA_FILE + '.tmp', DATA_FILE, () => {});
+    });
+  }, 250);
+}
+
+// user record: { name, hash, salt, iterations, created, save, friends[], incoming[], outgoing[] }
+function getUser(id) { return DB.users[id]; }
+
+function ensureLists(u) {
+  u.friends = u.friends || [];
+  u.incoming = u.incoming || [];
+  u.outgoing = u.outgoing || [];
+  return u;
+}
+
+/* ---------------- auth ---------------- */
+
+const tokens = new Map();    // token -> userId
+const pending = new Map();   // userId -> queued events awaiting collection
+const waiters = new Map();   // userId -> { res, timer } for a held long-poll
+const lastSeen = new Map();  // userId -> ms of last contact
+
+const POLL_HOLD_MS = 20000;  // how long to hold a poll open before answering empty
+const ONLINE_MS = 45000;     // counted as present if seen this recently
+// Generous, because browsers throttle background tabs to roughly one timer a minute.
+// A tighter window would drop players for glancing at another app.
+const STALE_MS = 150000;
+
+function hashPassword(password, salt, iterations) {
+  return new Promise((resolve, reject) => {
+    crypto.pbkdf2(password, salt, iterations, 32, 'sha256', (err, key) =>
+      err ? reject(err) : resolve(key.toString('base64')));
+  });
+}
+
+function normalizeId(name) { return String(name || '').trim().toLowerCase(); }
+
+function validate(username, password) {
+  const id = normalizeId(username);
+  if (id.length < 3 || id.length > 14) return 'Username must be 3-14 characters';
+  if (!/^[a-z0-9_]+$/.test(id)) return 'Use letters, numbers and _ only';
+  if (String(password).length < 4) return 'Password must be at least 4 characters';
+  return null;
+}
+
+function userIdFromToken(token) { return tokens.get(String(token || '')); }
+
+function issueToken(id) {
+  const token = crypto.randomBytes(24).toString('hex');
+  tokens.set(token, id);
+  return token;
+}
+
+/* ---------------- presence + push ---------------- */
+
+function currentMatch(id) { return matchOf(id); }
+
+// Long-polling rather than SSE. CDNs and tunnels buffer event streams until enough
+// bytes accumulate, which stalls an idle stream forever (Cloudflare does exactly
+// this, and strips X-Accel-Buffering). A held request/response gets through anything.
+function isOnline(id) {
+  if (waiters.has(id)) return true;
+  const seen = lastSeen.get(id);
+  return !!seen && Date.now() - seen < ONLINE_MS;
+}
+
+function push(id, type, payload) {
+  const q = pending.get(id) || [];
+  q.push({ type, ...payload });
+  if (q.length > 300) q.shift();          // a long-gone client can't grow forever
+  pending.set(id, q);
+  flushWaiter(id);
+  return true;
+}
+
+function flushWaiter(id) {
+  const w = waiters.get(id);
+  const q = pending.get(id);
+  if (!w || !q || !q.length) return;
+  waiters.delete(id);
+  clearTimeout(w.timer);
+  pending.set(id, []);
+  try { sendJSON(w.res, 200, { ok: true, events: q }); } catch (e) { /* client vanished */ }
+}
+
+function friendPayload(id) {
+  const u = ensureLists(getUser(id));
+  return {
+    friends: u.friends.map(f => ({
+      name: getUser(f) ? getUser(f).name : f.toUpperCase(),
+      id: f,
+      online: isOnline(f),
+      busy: !!currentMatch(f),
+    })),
+    incoming: u.incoming.map(f => ({ id: f, name: getUser(f) ? getUser(f).name : f.toUpperCase() })),
+    outgoing: u.outgoing.map(f => ({ id: f, name: getUser(f) ? getUser(f).name : f.toUpperCase() })),
+  };
+}
+
+function pushFriends(id) {
+  if (isOnline(id)) push(id, 'friends', friendPayload(id));
+}
+
+function notifyFriendsOfPresence(id) {
+  const u = ensureLists(getUser(id));
+  u.friends.forEach(f => pushFriends(f));
+}
+
+/* ---------------- invites ---------------- */
+
+const invites = new Map();  // inviteId -> { from, to, at, timer }
+
+function cancelInvite(inviteId, reason) {
+  const inv = invites.get(inviteId);
+  if (!inv) return;
+  clearTimeout(inv.timer);
+  invites.delete(inviteId);
+  push(inv.to, 'invite-cancelled', { inviteId, reason });
+  push(inv.from, 'invite-cancelled', { inviteId, reason });
+}
+
+/* ---------------- match ---------------- */
+
+const matches = new Map();  // matchId -> match
+const playerMatch = new Map();  // userId -> matchId
+
+function matchOf(id) { return matches.get(playerMatch.get(id)); }
+
+function randInt(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+
+function drawKnown() {
+  return Math.random() < KNOWN_LOW_CHANCE
+    ? randInt(CARD_MIN, KNOWN_LOW_MAX)
+    : randInt(KNOWN_LOW_MAX + 1, CARD_MAX);
+}
+
+// Matching numbers cancel; the highest number left alone wins.
+function findWinner(entries) {
+  const counts = {};
+  entries.forEach(e => { counts[e.card] = (counts[e.card] || 0) + 1; });
+  const unique = entries.filter(e => counts[e.card] === 1);
+  return unique.length ? unique.reduce((a, b) => (a.card > b.card ? a : b)) : null;
+}
+
+function startMatch(humanIds, modeKey, friendly) {
+  const mode = MODES[modeKey] || MODES.party;
+  const id = crypto.randomBytes(8).toString('hex');
+
+  // Bot skill tracks the arena the real players are climbing in.
+  const trophies = humanIds.map(h => (getUser(h) && getUser(h).save && getUser(h).save.trophies) || 0);
+  const avg = trophies.reduce((a, b) => a + b, 0) / Math.max(1, trophies.length);
+  const baseWeak = botWeaknessFor(arenaNumberFor(avg));
+
+  const players = humanIds.map(uid => ({
+    id: uid, bot: false, name: getUser(uid).name,
+    avatar: (getUser(uid).save && getUser(uid).save.avatar) || '🎮',
+    score: 0, candidates: [], pick: null,
+  }));
+
+  const taken = new Set(players.map(p => p.name));
+  while (players.length < mode.players) {
+    const b = makeBotIdentity(taken);
+    players.push({
+      id: null, bot: true, name: b.name, avatar: b.avatar, mood: b.mood,
+      score: 0, candidates: [], pick: null,
+      weakness: Math.max(0, baseWeak + (Math.random() - 0.5) * BOT_WEAKNESS_SPREAD),
+    });
+  }
+
+  const m = {
+    id, mode: modeKey,
+    friendly: !!friendly,
+    players,
+    pot: 1,
+    round: 0,
+    phase: 'idle',
+    endsAt: Date.now() + MATCH_SECONDS * 1000,
+    timers: [],
+    over: false,
+    sudden: false,
+    suddenIdx: null,
+    suddenWinner: null,
+  };
+  matches.set(id, m);
+  humanIds.forEach(uid => playerMatch.set(uid, id));
+
+  players.forEach((p, i) => {
+    if (!p.id) return;
+    push(p.id, 'match-start', {
+      matchId: id,
+      mode: modeKey,
+      friendly: !!friendly,
+      you: i,
+      // no bot flag: the client can't reveal what it was never told
+      seats: players.map(x => ({ name: x.name, avatar: x.avatar })),
+      seconds: MATCH_SECONDS,
+    });
+  });
+  humanIds.forEach(uid => { pushFriends(uid); notifyFriendsOfPresence(uid); });
+
+  later(m, () => beginRound(m), 900);
+  return m;
+}
+
+// Indices still playing -- everyone, or just those tied for the lead in sudden death.
+function activeIdx(m) {
+  return m.suddenIdx || m.players.map((_, i) => i);
+}
+
+function beginRound(m) {
+  if (m.over) return;
+  if (!m.sudden && Date.now() >= m.endsAt) return finishMatch(m);
+
+  m.round++;
+  m.phase = 'choose';
+  const active = activeIdx(m);
+  active.forEach(i => {
+    const p = m.players[i];
+    p.pick = null;
+    p.candidates = [drawKnown(), randInt(CARD_MIN, CARD_MAX)];
+  });
+
+  m.players.forEach((p, i) => {
+    if (!p.id) return;
+    push(p.id, 'round', {
+      round: m.round,
+      known: active.includes(i) ? p.candidates[0] : null,
+      spectating: !active.includes(i),
+      active,
+      pot: m.pot,
+      sudden: m.sudden,
+      msLeft: Math.max(0, m.endsAt - Date.now()),
+    });
+  });
+
+  // bots decide on their own clock so the table feels alive
+  active.forEach(i => {
+    const p = m.players[i];
+    if (!p.bot) return;
+    later(m, () => {
+      if (m.phase !== 'choose' || p.pick !== null) return;
+      submitPickIndex(m, i, botChoice(p));
+    }, randInt(400, 1500));
+  });
+
+  later(m, () => {
+    active.forEach(i => {
+      const p = m.players[i];
+      if (p.pick === null) p.pick = p.candidates[0] <= p.candidates[1] ? 0 : 1;
+    });
+    beginCountdown(m);
+  }, SELECT_MS);
+}
+
+function botChoice(p) {
+  if (Math.random() < p.weakness) return 0;      // sloppy: grab the visible card
+  const top = p.candidates[0];
+  if (top >= 8) return Math.random() < 0.75 ? 0 : 1;
+  if (top <= 3) return Math.random() < 0.75 ? 1 : 0;
+  return randInt(0, 1);
+}
+
+function submitPickIndex(m, playerIdx, index) {
+  if (m.over || m.phase !== 'choose') return;
+  const p = m.players[playerIdx];
+  if (!p || p.pick !== null) return;
+  if (!activeIdx(m).includes(playerIdx)) return;
+  p.pick = index === 1 ? 1 : 0;
+
+  m.players.forEach(x => { if (x.id) push(x.id, 'picked', { seat: playerIdx }); });
+  if (activeIdx(m).every(i => m.players[i].pick !== null)) {
+    clearMatchTimers(m);
+    later(m, () => beginCountdown(m), 200);
+  }
+}
+
+function submitPick(m, userId, index) {
+  const idx = m.players.findIndex(p => p.id === userId);
+  if (idx >= 0) submitPickIndex(m, idx, index);
+}
+
+function beginCountdown(m) {
+  if (m.over || m.phase === 'count') return;
+  m.phase = 'count';
+  clearMatchTimers(m);
+  m.players.forEach(p => { if (p.id) push(p.id, 'countdown', { beat: BEAT_MS }); });
+  later(m, () => resolveRound(m), BEAT_MS * 3 + REVEAL_MS);
+}
+
+function resolveRound(m) {
+  if (m.over) return;
+  m.phase = 'resolve';
+
+  const active = activeIdx(m);
+  const entries = active.map(i => ({ i, card: m.players[i].candidates[m.players[i].pick] }));
+  const winner = findWinner(entries);
+  const gained = winner ? m.pot : 0;
+
+  if (winner) {
+    m.players[winner.i].score += gained;
+    m.pot = 1;
+  } else if (!m.sudden) {
+    m.pot++;
+  }
+
+  // Bots emote through the same channel a person would, so their reactions read as
+  // ordinary player behaviour rather than a tell.
+  const reactions = [];
+  active.forEach(i => {
+    const p = m.players[i];
+    if (!p.bot || Math.random() > 0.55) return;
+    const set = MOODS[p.mood] || MOODS.hype;
+    let key = winner ? (winner.i === i ? 'win' : 'lose') : 'nobody';
+    if (winner && winner.card <= 3 && winner.i !== i) key = 'upset';
+    reactions.push({ seat: i, emoji: set[key], delay: randInt(120, 520) });
+  });
+
+  const payload = {
+    cards: entries.map(e => ({ seat: e.i, card: e.card })),
+    winner: winner ? winner.i : null,
+    gained,
+    pot: m.pot,
+    scores: m.players.map(p => p.score),
+    sudden: m.sudden,
+    reactions,
+    msLeft: Math.max(0, m.endsAt - Date.now()),
+  };
+  m.players.forEach(p => { if (p.id) push(p.id, 'reveal', payload); });
+
+  if (m.sudden && winner) {
+    m.suddenWinner = winner.i;
+    later(m, () => finishMatch(m), 1600);
+    return;
+  }
+
+  later(m, () => {
+    if (!m.sudden && Date.now() >= m.endsAt) finishMatch(m);
+    else beginRound(m);
+  }, RESOLVE_MS);
+}
+
+function enterSuddenDeath(m, tied) {
+  clearMatchTimers(m);
+  m.sudden = true;
+  m.suddenIdx = tied;
+  m.pot = 1;
+  m.players.forEach(p => {
+    if (p.id) push(p.id, 'sudden-death', { active: tied, names: tied.map(i => m.players[i].name) });
+  });
+  later(m, () => beginRound(m), 2300);
+}
+
+function finishMatch(m, forfeitBy) {
+  if (m.over) return;
+
+  if (!forfeitBy && !m.sudden) {
+    const top = Math.max(...m.players.map(p => p.score));
+    const tied = m.players.map((p, i) => (p.score === top ? i : -1)).filter(i => i >= 0);
+    if (tied.length > 1) return enterSuddenDeath(m, tied);
+  }
+
+  m.over = true;
+  clearMatchTimers(m);
+
+  // Sudden-death winner takes first outright; everyone else falls in by score.
+  const order = m.players.map((p, i) => ({ i, score: p.score }))
+    .sort((a, b) => b.score - a.score);
+  if (m.suddenWinner !== null && m.suddenWinner !== undefined) {
+    const at = order.findIndex(o => o.i === m.suddenWinner);
+    if (at > 0) order.unshift(order.splice(at, 1)[0]);
+  }
+  if (forfeitBy) {
+    const quitter = m.players.findIndex(p => p.id === forfeitBy);
+    const at = order.findIndex(o => o.i === quitter);
+    if (at >= 0) order.push(order.splice(at, 1)[0]);   // leavers finish last
+  }
+
+  const standings = order.map(o => ({
+    seat: o.i, name: m.players[o.i].name, avatar: m.players[o.i].avatar, score: o.score,
+  }));
+
+  m.players.forEach((p, i) => {
+    if (!p.id) return;
+    push(p.id, 'match-end', {
+      place: order.findIndex(o => o.i === i),
+      standings,
+      forfeit: !!forfeitBy && p.id !== forfeitBy,
+      friendly: m.friendly,
+      mode: m.mode,
+    });
+    playerMatch.delete(p.id);
+  });
+  matches.delete(m.id);
+  m.players.forEach(p => { if (p.id) { pushFriends(p.id); notifyFriendsOfPresence(p.id); } });
+}
+
+/* ---------------- matchmaking queue ---------------- */
+
+const queues = { duel: [], trio: [], party: [] };
+
+function queueOf(id) {
+  for (const key of Object.keys(queues)) {
+    const at = queues[key].findIndex(e => e.id === id);
+    if (at >= 0) return { key, at };
+  }
+  return null;
+}
+
+function leaveQueue(id) {
+  const found = queueOf(id);
+  if (!found) return false;
+  const [entry] = queues[found.key].splice(found.at, 1);
+  clearTimeout(entry.timer);
+  broadcastQueue(found.key);
+  return true;
+}
+
+function broadcastQueue(key) {
+  const need = MODES[key].players;
+  queues[key].forEach(e => push(e.id, 'queue', {
+    mode: key, waiting: queues[key].length, need,
+    msLeft: Math.max(0, QUEUE_WAIT_MS - (Date.now() - e.at)),
+  }));
+}
+
+function joinQueue(id, key) {
+  if (!MODES[key]) return { ok: false, msg: 'Unknown mode' };
+  if (matchOf(id)) return { ok: false, msg: 'You are already in a match' };
+  leaveQueue(id);
+
+  const entry = { id, at: Date.now() };
+  entry.timer = setTimeout(() => launch(key, true), QUEUE_WAIT_MS);
+  queues[key].push(entry);
+  broadcastQueue(key);
+
+  if (queues[key].length >= MODES[key].players) launch(key, false);
+  return { ok: true };
+}
+
+// Pull players off the queue and start. With `fillBots`, go even if short-handed.
+function launch(key, fillBots) {
+  const need = MODES[key].players;
+  const q = queues[key];
+  if (!q.length) return;
+  if (!fillBots && q.length < need) return;
+
+  const taken = q.splice(0, Math.min(need, q.length));
+  taken.forEach(e => clearTimeout(e.timer));
+  const ids = taken.map(e => e.id).filter(uid => isOnline(uid) && !matchOf(uid));
+  if (!ids.length) { broadcastQueue(key); return; }
+
+  startMatch(ids, key);
+  broadcastQueue(key);
+}
+
+function later(m, fn, ms) {
+  const t = setTimeout(() => { if (!m.over) fn(); }, ms);
+  m.timers.push(t);
+  return t;
+}
+
+function clearMatchTimers(m) {
+  m.timers.forEach(clearTimeout);
+  m.timers = [];
+}
+
+/* ---------------- http helpers ---------------- */
+
+function sendJSON(res, code, obj) {
+  const body = JSON.stringify(obj);
+  res.writeHead(code, {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-store',
+    'Content-Length': Buffer.byteLength(body),
+  });
+  res.end(body);
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', c => {
+      data += c;
+      if (data.length > 256 * 1024) { reject(new Error('too large')); req.destroy(); }
+    });
+    req.on('end', () => {
+      try { resolve(data ? JSON.parse(data) : {}); }
+      catch (e) { reject(e); }
+    });
+    req.on('error', reject);
+  });
+}
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+};
+
+function serveStatic(req, res, urlPath) {
+  const rel = decodeURIComponent(urlPath === '/' ? '/index.html' : urlPath);
+
+  // Never serve dotfiles or dot-directories. Without this, running `git init` here
+  // would publish .git/config to anyone who asked for it.
+  if (rel.split('/').some(seg => seg.startsWith('.') && seg !== '')) {
+    res.writeHead(403).end('Forbidden');
+    return;
+  }
+
+  // resolve then confirm it stayed inside ROOT -- blocks ../ traversal
+  const full = path.resolve(ROOT, '.' + rel);
+  if (full !== ROOT && !full.startsWith(ROOT + path.sep)) {
+    res.writeHead(403).end('Forbidden');
+    return;
+  }
+  const DENY = ['data.json', 'server.js', 'package.json', 'package-lock.json'];
+  if (DENY.includes(path.basename(full).toLowerCase())) {
+    res.writeHead(403).end('Forbidden');
+    return;
+  }
+  fs.readFile(full, (err, buf) => {
+    if (err) { res.writeHead(404).end('Not found'); return; }
+    res.writeHead(200, {
+      'Content-Type': MIME[path.extname(full).toLowerCase()] || 'application/octet-stream',
+      'Cache-Control': 'no-store',
+    });
+    res.end(buf);
+  });
+}
+
+/* ---------------- rate limiting ---------------- */
+
+const hits = new Map();
+function throttled(ip, key, limit, windowMs) {
+  const k = ip + ':' + key;
+  const now = Date.now();
+  const rec = hits.get(k) || { n: 0, t: now };
+  if (now - rec.t > windowMs) { rec.n = 0; rec.t = now; }
+  rec.n++;
+  hits.set(k, rec);
+  return rec.n > limit;
+}
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60 * 1000;
+  for (const [k, v] of hits) if (v.t < cutoff) hits.delete(k);
+}, 60000).unref();
+
+/* ---------------- routes ---------------- */
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://localhost');
+  const route = url.pathname;
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+
+  if (!route.startsWith('/api/')) return serveStatic(req, res, route);
+
+  if (req.method !== 'POST') return sendJSON(res, 405, { ok: false, msg: 'Use POST' });
+
+  let body;
+  try { body = await readBody(req); }
+  catch (e) { return sendJSON(res, 400, { ok: false, msg: 'Bad request' }); }
+
+  // ---- auth ----
+  if (route === '/api/auth/signup' || route === '/api/auth/login') {
+    if (throttled(ip, 'auth', 20, 60000)) return sendJSON(res, 429, { ok: false, msg: 'Too many attempts, wait a minute' });
+    const problem = validate(body.username, body.password);
+    if (problem) return sendJSON(res, 200, { ok: false, msg: problem });
+    const id = normalizeId(body.username);
+
+    if (route === '/api/auth/signup') {
+      if (getUser(id)) return sendJSON(res, 200, { ok: false, msg: 'That username is taken' });
+      const salt = crypto.randomBytes(16).toString('base64');
+      const hash = await hashPassword(body.password, salt, PBKDF2_ITERATIONS);
+      DB.users[id] = {
+        name: id.toUpperCase(), hash, salt, iterations: PBKDF2_ITERATIONS,
+        created: Date.now(), save: body.save || null, friends: [], incoming: [], outgoing: [],
+      };
+      saveDB();
+      const token = issueToken(id);
+      return sendJSON(res, 200, { ok: true, token, name: DB.users[id].name, save: DB.users[id].save });
+    }
+
+    const u = getUser(id);
+    if (!u) return sendJSON(res, 200, { ok: false, msg: 'No account with that username' });
+    const attempt = await hashPassword(body.password, u.salt, u.iterations);
+    if (attempt !== u.hash) return sendJSON(res, 200, { ok: false, msg: 'Wrong password' });
+    return sendJSON(res, 200, { ok: true, token: issueToken(id), name: u.name, save: u.save });
+  }
+
+  // everything past here needs a token
+  const me = userIdFromToken(body.token);
+  if (!me) return sendJSON(res, 401, { ok: false, msg: 'Not signed in' });
+  const meUser = ensureLists(getUser(me));
+
+  if (route === '/api/ping') {
+    lastSeen.set(me, Date.now());
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  // Asked once whenever the client starts up. Returns the truth about right now, so
+  // a refresh mid-match puts you back at the table instead of stranding you in a
+  // match the server thinks you're in and your screen knows nothing about.
+  if (route === '/api/sync') {
+    lastSeen.set(me, Date.now());
+    notifyFriendsOfPresence(me);
+    const live = matchOf(me);
+    return sendJSON(res, 200, {
+      ok: true,
+      friends: friendPayload(me),
+      match: live && !live.over ? {
+        matchId: live.id,
+        mode: live.mode,
+        friendly: live.friendly,
+        you: live.players.findIndex(p => p.id === me),
+        seats: live.players.map(x => ({ name: x.name, avatar: x.avatar })),
+        seconds: Math.max(1, Math.ceil((live.endsAt - Date.now()) / 1000)),
+        scores: live.players.map(x => x.score),
+        resync: true,
+      } : null,
+    });
+  }
+
+  // Held open until something happens, so events arrive as fast as a socket would
+  // deliver them while still looking like an ordinary request to every proxy.
+  if (route === '/api/poll') {
+    const wasOffline = !isOnline(me);
+    lastSeen.set(me, Date.now());
+    if (wasOffline) notifyFriendsOfPresence(me);
+
+    const queued = pending.get(me);
+    if (queued && queued.length) {
+      pending.set(me, []);
+      return sendJSON(res, 200, { ok: true, events: queued });
+    }
+
+    const existing = waiters.get(me);            // only one poll may wait per player
+    if (existing) {
+      clearTimeout(existing.timer);
+      waiters.delete(me);
+      try { sendJSON(existing.res, 200, { ok: true, events: [] }); } catch (e) {}
+    }
+    const timer = setTimeout(() => {
+      if (waiters.get(me)?.res !== res) return;
+      waiters.delete(me);
+      try { sendJSON(res, 200, { ok: true, events: [] }); } catch (e) {}
+    }, POLL_HOLD_MS);
+    waiters.set(me, { res, timer });
+    req.on('close', () => {
+      const w = waiters.get(me);
+      if (w && w.res === res) { clearTimeout(w.timer); waiters.delete(me); }
+    });
+    return;
+  }
+
+  if (route === '/api/me') {
+    return sendJSON(res, 200, { ok: true, name: meUser.name, save: meUser.save });
+  }
+
+  if (route === '/api/save') {
+    meUser.save = body.save || null;
+    saveDB();
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  if (route === '/api/logout') {
+    tokens.delete(String(body.token));
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  if (route === '/api/friends') {
+    return sendJSON(res, 200, { ok: true, ...friendPayload(me) });
+  }
+
+  if (route === '/api/friends/request') {
+    const other = normalizeId(body.username);
+    if (other === me) return sendJSON(res, 200, { ok: false, msg: "You can't add yourself" });
+    const ou = getUser(other);
+    if (!ou) return sendJSON(res, 200, { ok: false, msg: 'No player with that username' });
+    ensureLists(ou);
+    if (meUser.friends.includes(other)) return sendJSON(res, 200, { ok: false, msg: 'Already friends' });
+    if (meUser.outgoing.includes(other)) return sendJSON(res, 200, { ok: false, msg: 'Request already sent' });
+
+    if (meUser.incoming.includes(other)) {          // they asked first -- accept instead
+      meUser.incoming = meUser.incoming.filter(x => x !== other);
+      ou.outgoing = ou.outgoing.filter(x => x !== me);
+      meUser.friends.push(other);
+      ou.friends.push(me);
+    } else {
+      meUser.outgoing.push(other);
+      ou.incoming.push(me);
+    }
+    saveDB();
+    pushFriends(me); pushFriends(other);
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  if (route === '/api/friends/respond') {
+    const other = normalizeId(body.username);
+    const ou = getUser(other);
+    if (!ou) return sendJSON(res, 200, { ok: false, msg: 'No player with that username' });
+    ensureLists(ou);
+    if (!meUser.incoming.includes(other)) return sendJSON(res, 200, { ok: false, msg: 'No request from them' });
+    meUser.incoming = meUser.incoming.filter(x => x !== other);
+    ou.outgoing = ou.outgoing.filter(x => x !== me);
+    if (body.accept) {
+      if (!meUser.friends.includes(other)) meUser.friends.push(other);
+      if (!ou.friends.includes(me)) ou.friends.push(me);
+    }
+    saveDB();
+    pushFriends(me); pushFriends(other);
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  if (route === '/api/friends/remove') {
+    const other = normalizeId(body.username);
+    const ou = getUser(other);
+    meUser.friends = meUser.friends.filter(x => x !== other);
+    if (ou) { ensureLists(ou); ou.friends = ou.friends.filter(x => x !== me); }
+    saveDB();
+    pushFriends(me); if (ou) pushFriends(other);
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  // ---- invites ----
+  if (route === '/api/invite/send') {
+    const other = normalizeId(body.username);
+    if (!meUser.friends.includes(other)) return sendJSON(res, 200, { ok: false, msg: 'You are not friends' });
+    if (!isOnline(other)) return sendJSON(res, 200, { ok: false, msg: 'They are offline' });
+    if (matchOf(me)) return sendJSON(res, 200, { ok: false, msg: 'You are already in a match' });
+    if (matchOf(other)) return sendJSON(res, 200, { ok: false, msg: 'They are already in a match' });
+
+    const inviteId = crypto.randomBytes(6).toString('hex');
+    const inv = { from: me, to: other, at: Date.now() };
+    inv.timer = setTimeout(() => cancelInvite(inviteId, 'expired'), 45000);
+    invites.set(inviteId, inv);
+    push(other, 'invite', { inviteId, from: meUser.name, fromId: me });
+    return sendJSON(res, 200, { ok: true, inviteId });
+  }
+
+  if (route === '/api/invite/respond') {
+    const inv = invites.get(String(body.inviteId));
+    if (!inv || inv.to !== me) return sendJSON(res, 200, { ok: false, msg: 'That invite expired' });
+    clearTimeout(inv.timer);
+    invites.delete(String(body.inviteId));
+
+    if (!body.accept) {
+      push(inv.from, 'invite-declined', { by: meUser.name });
+      return sendJSON(res, 200, { ok: true });
+    }
+    if (!isOnline(inv.from)) return sendJSON(res, 200, { ok: false, msg: 'They went offline' });
+    if (matchOf(inv.from) || matchOf(me)) return sendJSON(res, 200, { ok: false, msg: 'Someone is already in a match' });
+    leaveQueue(inv.from); leaveQueue(me);
+    startMatch([inv.from, me], 'duel', true);   // friendly: no trophies, no XP
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  // ---- queue ----
+  if (route === '/api/queue/join') {
+    return sendJSON(res, 200, joinQueue(me, String(body.mode || 'party')));
+  }
+
+  if (route === '/api/queue/leave') {
+    leaveQueue(me);
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  // ---- match ----
+  if (route === '/api/match/pick') {
+    const m = matchOf(me);
+    if (!m) return sendJSON(res, 200, { ok: false, msg: 'No active match' });
+    submitPick(m, me, Number(body.index));
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  if (route === '/api/match/leave') {
+    const m = matchOf(me);
+    if (m) finishMatch(m, me);
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  return sendJSON(res, 404, { ok: false, msg: 'Unknown endpoint' });
+});
+
+// Reap players who stopped polling, so their opponent isn't left playing a ghost.
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, seen] of [...lastSeen]) {
+    if (now - seen <= STALE_MS) continue;
+    lastSeen.delete(id);
+    pending.delete(id);
+    const w = waiters.get(id);
+    if (w) {
+      clearTimeout(w.timer);
+      waiters.delete(id);
+      try { sendJSON(w.res, 200, { ok: true, events: [] }); } catch (e) {}
+    }
+    leaveQueue(id);
+    const m = matchOf(id);
+    if (m && !m.over) finishMatch(m, id);
+    notifyFriendsOfPresence(id);
+  }
+}, 10000).unref();
+
+server.listen(PORT, () => {
+  console.log(`War Prize server on http://localhost:${PORT}`);
+  console.log(`accounts: ${Object.keys(DB.users).length}`);
+});
