@@ -129,11 +129,27 @@ function hashPassword(password, salt, iterations) {
 
 function normalizeId(name) { return String(name || '').trim().toLowerCase(); }
 
+// Deliberately NOT checking whether a password is already in use by someone else.
+// Telling a stranger "that password is taken" hands them a working password, and
+// salted hashes can't be compared across accounts anyway without weakening them.
+const COMMON_PASSWORDS = new Set([
+  'password', 'password1', 'passw0rd', '12345678', '123456789', '1234567890',
+  'qwerty123', 'qwertyui', '1q2w3e4r', 'abc12345', 'iloveyou', 'letmein1',
+  'welcome1', 'admin123', 'football', 'baseball', 'sunshine', 'princess',
+  'dragon123', 'monkey123', 'superman', 'trustno1', 'starwars', 'whatever',
+]);
+
 function validate(username, password) {
   const id = normalizeId(username);
   if (id.length < 3 || id.length > 14) return 'Username must be 3-14 characters';
   if (!/^[a-z0-9_]+$/.test(id)) return 'Use letters, numbers and _ only';
-  if (String(password).length < 4) return 'Password must be at least 4 characters';
+
+  const pw = String(password);
+  if (pw.length < 8) return 'Password must be at least 8 characters';
+  if (pw.length > 200) return 'Password is too long';
+  if (COMMON_PASSWORDS.has(pw.toLowerCase())) return 'That password is too easy to guess';
+  if (/^(.)\1+$/.test(pw)) return 'That password is too easy to guess';
+  if (pw.toLowerCase() === id) return "Password can't be your username";
   return null;
 }
 

@@ -89,11 +89,15 @@ function adoptSession(id, name, save) {
 
 /* ---------------- auth ---------------- */
 
+// Mirrors the server's rules so mistakes are caught before a round trip. The server
+// re-checks everything regardless -- this is convenience, not the actual gate.
 function validateCredentials(username, password) {
   const id = String(username || '').trim().toLowerCase();
   if (id.length < 3 || id.length > 14) return 'Username must be 3-14 characters';
   if (!/^[a-z0-9_]+$/.test(id)) return 'Use letters, numbers and _ only';
-  if (String(password).length < 4) return 'Password must be at least 4 characters';
+  const pw = String(password);
+  if (pw.length < 8) return 'Password must be at least 8 characters';
+  if (pw.toLowerCase() === id) return "Password can't be your username";
   return null;
 }
 
