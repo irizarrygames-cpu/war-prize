@@ -467,10 +467,12 @@ function renderHand() {
   if (!inRound) {
     $('handLabel').textContent = 'WATCHING SUDDEN DEATH';
     $('selectBar').style.width = '0%';
+    $('peekBtn').hidden = true;
     return;
   }
 
   $('handLabel').textContent = 'PLAY IT SAFE, OR GAMBLE?';
+  renderPeekButton();
 
   // The top card is face-up and the one under it is hidden -- that asymmetry is the
   // whole decision: a known number, or a blind roll that might beat it.
@@ -488,6 +490,47 @@ function renderHand() {
     holder.appendChild(wrap);
   });
 }
+
+function renderPeekButton() {
+  const btn = $('peekBtn');
+  const left = M ? (M.peeks || 0) : 0;
+  const spent = M && M.peekedThisRound;
+  $('peekCount').textContent = left;
+  btn.classList.toggle('spent', !!spent);
+  btn.disabled = !!spent || left < 1 || M.players[0].pick !== null;
+  btn.hidden = false;
+}
+
+// Lifts the corner of the gamble card and slides a hand in to look under it.
+async function usePeek() {
+  if (!M || M.phase !== 'choose' || M.peekedThisRound) return;
+  const btn = $('peekBtn');
+  btn.disabled = true;
+
+  const res = await api('match/peek');
+  if (!res.ok) { SFX.error(); toast(res.msg || 'No peeks left'); renderPeekButton(); return; }
+
+  M.peeks = res.peeks;
+  M.peekedThisRound = true;
+  M.players[0].candidates[1] = res.card;
+
+  const wrap = $('handCards').children[1];
+  if (wrap) {
+    const card = wrap.querySelector('.card');
+    card.querySelector('.card-num').textContent = res.card;
+    const hand = el('div', 'peek-hand', '🤏');
+    wrap.appendChild(hand);
+    wrap.classList.add('peeking');
+    SFX.whoosh();
+    setTimeout(() => SFX.select(), 180);
+    setTimeout(() => hand.remove(), 1100);
+    wrap.querySelector('.hand-tag').textContent = 'SEEN';
+    wrap.querySelector('.hand-tag').classList.add('known');
+  }
+  renderPeekButton();
+}
+
+$('peekBtn').onclick = usePeek;
 
 function startSelectBar() {
   const bar = $('selectBar');
@@ -513,6 +556,7 @@ function commitPick(player, index) {
   $('selectBar').style.transition = 'none';
   $('selectBar').style.width = '0%';
   player.seat.classList.add('ready');
+  renderPeekButton();                     // locked in, so no more peeking this round
 }
 
 // Everything visible about a resolved round. Shared by local matches (which decide the

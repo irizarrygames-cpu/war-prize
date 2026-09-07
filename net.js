@@ -56,6 +56,7 @@ function handleServerEvent(d) {
     case 'match-start':   startOnlineMatch(d); break;
     case 'round':         onlineRound(d); break;
     case 'picked':        onlineOpponentPicked(d); break;
+    case 'peeked':        onlineOpponentPeeked(d); break;
     case 'countdown':     onlineCountdown(); break;
     case 'reveal':        onlineReveal(d); break;
     case 'sudden-death':  onlineSuddenDeath(d); break;
@@ -305,6 +306,8 @@ function onlineRound(d) {
   M.round = d.round;
   M.phase = 'choose';
   M.prizePot = d.pot;
+  M.peeks = d.peeks;
+  M.peekedThisRound = false;
   M.endsAt = performance.now() + d.msLeft;
 
   const activeLocal = (d.active || []).map(localIndex);
@@ -331,6 +334,13 @@ function onlineOpponentPicked(d) {
   if (!M || !M.online) return;
   const p = M.players[localIndex(d.seat)];
   if (p) p.seat.classList.add('ready');
+}
+
+// Everyone sees who spent a peek -- knowing an opponent has looked is information.
+function onlineOpponentPeeked(d) {
+  if (!M || !M.online) return;
+  const p = M.players[localIndex(d.seat)];
+  if (p) showReaction(p, '👀');
 }
 
 function onlineSuddenDeath(d) {

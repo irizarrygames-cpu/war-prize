@@ -21,6 +21,7 @@ const MATCH_SECONDS = 60;
 const SELECT_MS = 3600, BEAT_MS = 420, REVEAL_MS = 620, RESOLVE_MS = 1300;
 const PBKDF2_ITERATIONS = 150000;
 const QUEUE_WAIT_MS = 30000;   // hunt for real players this long, then fill with bots
+const PEEKS_PER_MATCH = 3;     // spend one to see your gamble card before committing
 
 const MODES = {
   duel:  { players: 2 },
@@ -247,7 +248,7 @@ function startMatch(humanIds, modeKey, friendly) {
   const players = humanIds.map(uid => ({
     id: uid, bot: false, name: getUser(uid).name,
     avatar: (getUser(uid).save && getUser(uid).save.avatar) || '🎮',
-    score: 0, candidates: [], pick: null,
+    score: 0, candidates: [], pick: null, peeks: PEEKS_PER_MATCH, peeked: false,
   }));
 
   const taken = new Set(players.map(p => p.name));
@@ -255,7 +256,7 @@ function startMatch(humanIds, modeKey, friendly) {
     const b = makeBotIdentity(taken);
     players.push({
       id: null, bot: true, name: b.name, avatar: b.avatar, mood: b.mood,
-      score: 0, candidates: [], pick: null,
+      score: 0, candidates: [], pick: null, peeks: PEEKS_PER_MATCH, peeked: false,
       weakness: Math.max(0, baseWeak + (Math.random() - 0.5) * BOT_WEAKNESS_SPREAD),
     });
   }
@@ -310,6 +311,7 @@ function beginRound(m) {
   active.forEach(i => {
     const p = m.players[i];
     p.pick = null;
+    p.peeked = false;
     p.candidates = [drawKnown(), randInt(CARD_MIN, CARD_MAX)];
   });
 
@@ -321,6 +323,7 @@ function beginRound(m) {
       spectating: !active.includes(i),
       active,
       pot: m.pot,
+      peeks: p.peeks,
       sudden: m.sudden,
       msLeft: Math.max(0, m.endsAt - Date.now()),
     });
@@ -330,10 +333,24 @@ function beginRound(m) {
   active.forEach(i => {
     const p = m.players[i];
     if (!p.bot) return;
+    // Bots spend peeks too -- otherwise never seeing one would give them away.
+    // Worth more when a stacked pot is on the line, so they lean on them then.
+    const wantsPeek = p.peeks > 0 && Math.random() < (m.pot > 1 ? 0.45 : 0.18);
+    if (wantsPeek) {
+      later(m, () => {
+        if (m.phase !== 'choose' || p.pick !== null || p.peeks < 1) return;
+        p.peeks--;
+        p.peeked = true;
+        m.players.forEach(x => { if (x.id) push(x.id, 'peeked', { seat: i }); });
+      }, randInt(300, 700));
+    }
     later(m, () => {
       if (m.phase !== 'choose' || p.pick !== null) return;
-      submitPickIndex(m, i, botChoice(p));
-    }, randInt(400, 1500));
+      // Having looked, take the better card outright.
+      submitPickIndex(m, i, p.peeked
+        ? (p.candidates[0] >= p.candidates[1] ? 0 : 1)
+        : botChoice(p));
+    }, randInt(900, 1900));
   });
 
   later(m, () => {
@@ -862,6 +879,25 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ---- match ----
+  // Spending a peek is a server decision -- the client is never told the gamble
+  // card's value until it has actually paid a charge for it.
+  if (route === '/api/match/peek') {
+    const m = matchOf(me);
+    if (!m) return sendJSON(res, 200, { ok: false, msg: 'No active match' });
+    const idx = m.players.findIndex(p => p.id === me);
+    const p = m.players[idx];
+    if (!p || m.phase !== 'choose') return sendJSON(res, 200, { ok: false, msg: 'Not right now' });
+    if (!activeIdx(m).includes(idx)) return sendJSON(res, 200, { ok: false, msg: 'Not your round' });
+    if (p.pick !== null) return sendJSON(res, 200, { ok: false, msg: 'Already locked in' });
+    if (p.peeked) return sendJSON(res, 200, { ok: true, card: p.candidates[1], peeks: p.peeks });
+    if (p.peeks < 1) return sendJSON(res, 200, { ok: false, msg: 'No peeks left' });
+
+    p.peeks--;
+    p.peeked = true;
+    m.players.forEach(x => { if (x.id && x.id !== me) push(x.id, 'peeked', { seat: idx }); });
+    return sendJSON(res, 200, { ok: true, card: p.candidates[1], peeks: p.peeks });
+  }
+
   if (route === '/api/match/pick') {
     const m = matchOf(me);
     if (!m) return sendJSON(res, 200, { ok: false, msg: 'No active match' });
