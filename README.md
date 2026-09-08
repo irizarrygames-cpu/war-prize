@@ -35,15 +35,31 @@ hosted somewhere public, as below.
 Any host that runs Node works — Render, Railway, Fly.io. The server reads `PORT`
 from the environment, so most hosts need no configuration beyond:
 
-- **Build command:** none
+- **Build command:** `npm install`
 - **Start command:** `node server.js`
 
-**One thing to watch:** accounts live in `data.json` next to the server. Most free
-tiers use an ephemeral filesystem, which means *that file is wiped on every deploy
-and restart* — everyone's account and progress disappears. Before relying on it,
-either attach a persistent disk (Render and Fly both offer one) and keep `data.json`
-on it, or move accounts to a hosted database. This is fine for messing about with
-friends; it is not fine if you want progress to actually stick.
+### Where accounts live
+
+Set **`DATABASE_URL`** to a Postgres connection string and accounts are kept there.
+Leave it unset and they go in `data.json` next to the server, which is what you want
+locally — no setup, nothing to run.
+
+**Use the database for anything public.** Free hosts run on an ephemeral filesystem
+and restart the server whenever it has been idle a while, and `data.json` goes with
+it. That is not only a redeploy thing: on Render's free tier the site sleeps after
+about 15 minutes with nobody on it, so accounts vanished roughly every 15 quiet
+minutes. Every account on the live site was silently erased this way.
+
+Any Postgres works. The live site uses [Neon](https://neon.com)'s free plan, chosen
+because it doesn't expire and keeps your data — several free database tiers delete
+the whole thing after 30 days, which would have put us straight back here. To set
+one up: make a project, copy the connection string it shows you, and paste it into
+the host as an environment variable called `DATABASE_URL`. The table is created on
+first boot; there is nothing to run by hand.
+
+If `DATABASE_URL` is set but unreachable, **the server refuses to start** rather than
+coming up with an empty account list — otherwise it would tell everyone their
+account doesn't exist and then overwrite the real rows on the first save.
 
 Also use a host that terminates HTTPS (all of the above do). Passwords are hashed
 before storage, but they still travel over the wire on the way in.

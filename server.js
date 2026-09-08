@@ -77,24 +77,111 @@ function botWeaknessFor(arenaN) {
   return BOT_WEAKNESS_ARENA_1 + t * (BOT_WEAKNESS_ARENA_10 - BOT_WEAKNESS_ARENA_1);
 }
 
-/* ---------------- storage ---------------- */
+/* ---------------- storage ----------------
+   Accounts have to outlive the process. On a free host the server is restarted
+   whenever it has been idle a while, and anything written next to the code goes
+   with it -- which is exactly how every account on the live site got erased. So
+   when DATABASE_URL is set, accounts live in Postgres. Without it we fall back to
+   the JSON file, which keeps local development a zero-setup affair.
+
+   DB.users stays in memory and every read goes through it exactly as before. The
+   store only handles loading it at boot and writing back whatever changed. */
 
 let DB = { users: {} };
-try {
-  DB = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-  DB.users = DB.users || {};
-} catch (e) {
-  // first run
+
+const DATABASE_URL = process.env.DATABASE_URL || '';
+
+function makeFileStore() {
+  return {
+    kind: 'file',
+    async load() {
+      try {
+        const parsed = JSON.parse(await fs.promises.readFile(DATA_FILE, 'utf8'));
+        return parsed.users || {};
+      } catch (e) {
+        if (e.code === 'ENOENT') return {};        // first run
+        throw e;                                   // corrupt file -- don't start empty
+      }
+    },
+    async write(users) {
+      await fs.promises.writeFile(DATA_FILE + '.tmp', JSON.stringify({ users }));
+      await fs.promises.rename(DATA_FILE + '.tmp', DATA_FILE);
+    },
+  };
+}
+
+function makePostgresStore(url) {
+  const { neon } = require('@neondatabase/serverless');
+  const sql = neon(url);
+  return {
+    kind: 'postgres',
+    async load() {
+      await sql`CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        data JSONB NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`;
+      const rows = await sql`SELECT id, data FROM users`;
+      const users = {};
+      for (const row of rows) users[row.id] = row.data;
+      return users;
+    },
+    async write(users, changed) {
+      for (const id of changed) {
+        const rec = users[id];
+        if (!rec) continue;
+        await sql`INSERT INTO users (id, data) VALUES (${id}, ${JSON.stringify(rec)})
+                  ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`;
+      }
+    },
+  };
+}
+
+const store = DATABASE_URL ? makePostgresStore(DATABASE_URL) : makeFileStore();
+
+// What we last wrote for each account, so a flush can send only what actually
+// changed. Doing the comparison here means none of the callers have to say which
+// account they touched.
+const persisted = new Map();
+
+function changedUserIds() {
+  const changed = [];
+  for (const id of Object.keys(DB.users)) {
+    const json = JSON.stringify(DB.users[id]);
+    if (persisted.get(id) !== json) changed.push(id);
+  }
+  return changed;
 }
 
 let saveTimer = null;
+let saving = false;
+let saveQueued = false;
+
 function saveDB() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    fs.writeFile(DATA_FILE + '.tmp', JSON.stringify(DB), err => {
-      if (!err) fs.rename(DATA_FILE + '.tmp', DATA_FILE, () => {});
-    });
-  }, 250);
+  saveTimer = setTimeout(flushDB, 250);
+}
+
+// A safety net under the debounce. The shutdown hook below covers a polite restart,
+// but a free host can also just pull the plug, and then no handler runs at all --
+// this bounds what a player can lose to a few seconds rather than a whole session.
+setInterval(flushDB, 5000).unref();
+
+async function flushDB() {
+  if (saving) { saveQueued = true; return; }      // never two writes in flight
+  const changed = changedUserIds();
+  if (!changed.length) return;
+  saving = true;
+  try {
+    await store.write(DB.users, changed);
+    for (const id of changed) persisted.set(id, JSON.stringify(DB.users[id]));
+  } catch (e) {
+    // Leave them dirty; the next change retries them.
+    console.error('Could not save accounts:', e.message);
+  } finally {
+    saving = false;
+    if (saveQueued) { saveQueued = false; saveDB(); }
+  }
 }
 
 // user record: { name, hash, salt, iterations, created, save, friends[], incoming[], outgoing[] }
@@ -963,7 +1050,30 @@ setInterval(() => {
   }
 }, 10000).unref();
 
-server.listen(PORT, () => {
-  console.log(`War Prize server on http://localhost:${PORT}`);
-  console.log(`accounts: ${Object.keys(DB.users).length}`);
-});
+// A redeploy or an idle restart sends SIGTERM; write out anything still pending
+// rather than losing the last quarter-second of play.
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, async () => {
+    clearTimeout(saveTimer);
+    try { await flushDB(); } catch (e) { /* going down anyway */ }
+    process.exit(0);
+  });
+}
+
+(async () => {
+  try {
+    DB.users = await store.load();
+  } catch (e) {
+    // Starting with an empty set would tell every player their account doesn't
+    // exist, and then overwrite the good rows on the first save. Refusing to start
+    // is much safer -- the host restarts us and we try again.
+    console.error(`Could not load accounts from ${store.kind}: ${e.message}`);
+    process.exit(1);
+  }
+  for (const id of Object.keys(DB.users)) persisted.set(id, JSON.stringify(DB.users[id]));
+
+  server.listen(PORT, () => {
+    console.log(`War Prize server on http://localhost:${PORT}`);
+    console.log(`accounts: ${Object.keys(DB.users).length} (storage: ${store.kind})`);
+  });
+})();
