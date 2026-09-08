@@ -111,8 +111,23 @@ function makeFileStore() {
 }
 
 function makePostgresStore(url) {
-  const { neon } = require('@neondatabase/serverless');
-  const sql = neon(url);
+  let neon;
+  try {
+    ({ neon } = require('@neondatabase/serverless'));
+  } catch (e) {
+    // Almost always a host with no build step, so the dependency never got fetched.
+    console.error('DATABASE_URL is set but the Postgres driver is missing.');
+    console.error('Run "npm install", or set the host\'s build command to "npm install".');
+    process.exit(1);
+  }
+  let sql;
+  try {
+    sql = neon(url);
+  } catch (e) {
+    console.error('DATABASE_URL is not a valid Postgres connection string.');
+    console.error('It should look like: postgresql://user:password@host/dbname?sslmode=require');
+    process.exit(1);
+  }
   return {
     kind: 'postgres',
     async load() {
