@@ -168,6 +168,8 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
 }
 
 #tbLevel { flex-direction: column; align-items: flex-start; gap: 5px; margin-right: auto; }
+#tbTrophies { cursor: pointer; }
+#tbTrophies:hover { background: var(--panel-2); }
 
 .tb-level-badge {
   background: var(--blue);

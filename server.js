@@ -42,6 +42,19 @@ const BOT_NAME_B = ['bolt', 'claw', 'dash', 'edge', 'fang', 'gale', 'hawk', 'jin
   'wave', 'zap'];
 const AVATARS = ['🐉', '🦊', '🐼', '👽', '👑', '🐸', '💀', '🌟', '🐻', '🐰', '🤖', '🦁', '🐺', '🦈'];
 
+// The only emoji a player may send. Kept in step with REACTIONS in data.js.
+const REACTION_EMOJI = new Set(['😂', '💀', '😭', '🔥', '😡', '😱']);
+
+// Emoji are harmless but a held-down button shouldn't let anyone strobe the table.
+const reactClock = new Map();
+function spamming(id) {
+  const now = Date.now();
+  const last = reactClock.get(id) || 0;
+  if (now - last < 700) return true;
+  reactClock.set(id, now);
+  return false;
+}
+
 const MOODS = {
   hype:  { win: '🔥', lose: '😭', upset: '😱', nobody: '😂' },
   cocky: { win: '😂', lose: '😡', upset: '😡', nobody: '😡' },
@@ -1073,6 +1086,25 @@ const server = http.createServer(async (req, res) => {
     const m = matchOf(me);
     if (!m) return sendJSON(res, 200, { ok: false, msg: 'No active match' });
     submitPick(m, me, Number(body.index));
+    return sendJSON(res, 200, { ok: true });
+  }
+
+  // Reactions used to be drawn only on the sender's own screen, so nobody ever saw
+  // the ones you sent -- including the ones bought in the shop. They go through the
+  // server now, the same way a bot's do.
+  if (route === '/api/match/react') {
+    const m = matchOf(me);
+    if (!m) return sendJSON(res, 200, { ok: false, msg: 'No active match' });
+    const idx = m.players.findIndex(p => p.id === me);
+    if (idx < 0) return sendJSON(res, 200, { ok: false, msg: 'Not in this match' });
+    // Only the game's own emoji, so this can't be turned into a chat box.
+    if (!REACTION_EMOJI.has(String(body.emoji))) {
+      return sendJSON(res, 200, { ok: false, msg: 'Unknown reaction' });
+    }
+    if (spamming(me)) return sendJSON(res, 200, { ok: false, msg: 'Slow down' });
+    m.players.forEach(x => {
+      if (x.id && x.id !== me) push(x.id, 'reaction', { seat: idx, emoji: String(body.emoji) });
+    });
     return sendJSON(res, 200, { ok: true });
   }
 

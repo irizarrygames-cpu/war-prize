@@ -156,7 +156,14 @@ async function logOut() {
 
 /* ---------------- challenges ---------------- */
 
-function todayKey() { return new Date().toISOString().slice(0, 10); }
+// Local date, not UTC. toISOString() meant "daily" challenges reset at UTC midnight
+// -- around 8pm for anyone in the eastern US -- so a day's challenges vanished in
+// the middle of the evening.
+function todayKey() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 function refreshChallenges() {
   const key = todayKey();

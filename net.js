@@ -57,6 +57,7 @@ function handleServerEvent(d) {
     case 'round':         onlineRound(d); break;
     case 'picked':        onlineOpponentPicked(d); break;
     case 'peeked':        onlineOpponentPeeked(d); break;
+    case 'reaction':      onlineOpponentReacted(d); break;
     case 'countdown':     onlineCountdown(); break;
     case 'reveal':        onlineReveal(d); break;
     case 'sudden-death':  onlineSuddenDeath(d); break;
@@ -271,6 +272,9 @@ function startOnlineMatch(info) {
     stats: { prizeCards: 0, wonLowCard: false, reachedSudden: false },
   };
 
+  // A match always wins over the lesson.
+  if (typeof TUTORIAL !== 'undefined' && TUTORIAL.isRunning()) TUTORIAL.abort();
+
   show('matchScreen');
   const ar = arenaFor(SAVE.trophies);
   $('arenaBg').className = 'scene-host arena-bg-' + ar.n;
@@ -356,6 +360,12 @@ function onlineOpponentPeeked(d) {
   if (!M || !M.online) return;
   const p = M.players[localIndex(d.seat)];
   if (p) showReaction(p, '👀');
+}
+
+function onlineOpponentReacted(d) {
+  if (!M || !M.online) return;
+  const p = M.players[localIndex(d.seat)];
+  if (p) showReaction(p, d.emoji);
 }
 
 function onlineSuddenDeath(d) {

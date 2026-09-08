@@ -414,15 +414,31 @@ const TUTORIAL = (() => {
   };
 
   return {
+    isRunning() { return running; },
+
     start() {
       if (running) return;
       running = true;
       skipped = false;
       run().catch(e => { console.error('tutorial:', e); finish(false); });
     },
-    // Shown once, on the account's first visit.
+
+    // A match can arrive mid-lesson: reload during a match and the server hands it
+    // straight back. Without this the tutorial carried on underneath, waiting on a
+    // tap that could never come, and would then refuse to run again.
+    abort() {
+      if (!running) return;
+      running = false;
+      clearInterval(typing);
+      typing = null;
+      resolveWait(false);
+      spotlight(null);
+    },
+
+    // Shown once, on the account's first visit -- and never over a live match.
     maybeStart() {
       if (typeof SAVE === 'undefined' || !SAVE || SAVE.tutorialSeen) return false;
+      if (typeof M !== 'undefined' && M) return false;
       TUTORIAL.start();
       return true;
     },

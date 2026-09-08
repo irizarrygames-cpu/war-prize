@@ -402,6 +402,7 @@ function panelChallenges() {
       btn.textContent = `${def.coins} 🪙`;
       btn.classList.add('ready');
       btn.onclick = () => {
+        if (entry.claimed) return;      // a fast double tap must not pay out twice
         entry.claimed = true;
         SAVE.coins += def.coins;
         const lv = addXp(def.xp);
@@ -485,7 +486,12 @@ function buildReactionBar() {
   for (const r of REACTIONS) {
     if (!isUnlocked('reactions', r.id)) continue;
     const b = el('button', 'react-btn', r.emoji);
-    b.onclick = () => { showReaction(M.players[0], r.emoji); SFX.click(); };
+    b.onclick = () => {
+      if (!M || !M.players[0]) return;           // match already over
+      showReaction(M.players[0], r.emoji);       // instant on your own screen
+      SFX.click();
+      if (M.online) api('match/react', { emoji: r.emoji });        // and to everyone else
+    };
     bar.appendChild(b);
   }
 }
@@ -919,7 +925,7 @@ $('navProfile').onclick = () => { SFX.click(); openPanel('Profile', panelProfile
 $('navArenas').onclick = () => { SFX.click(); openPanel('Arenas', panelArenas); };
 $('navBoard').onclick = () => { SFX.click(); openLeaderboard(); };
 // Tapping your own trophy count going to the standings is the thing people try.
-$('menuTrophies').parentElement.onclick = () => { SFX.click(); openLeaderboard(); };
+$('tbTrophies').onclick = () => { SFX.click(); openLeaderboard(); };
 $('navChallenges').onclick = () => { SFX.click(); openPanel('Daily Challenges', panelChallenges); };
 $('navFriends').onclick = () => { SFX.click(); api('friends').then(r => { if (r.ok) FRIENDS = r; refreshPanel(); }); openPanel('Friends', panelFriends); };
 
