@@ -139,17 +139,26 @@ const COMMON_PASSWORDS = new Set([
   'dragon123', 'monkey123', 'superman', 'trustno1', 'starwars', 'whatever',
 ]);
 
-function validate(username, password) {
+function validateUsername(username) {
   const id = normalizeId(username);
   if (id.length < 3 || id.length > 14) return 'Username must be 3-14 characters';
   if (!/^[a-z0-9_]+$/.test(id)) return 'Use letters, numbers and _ only';
+  return null;
+}
+
+// Signup only. Login must NEVER run this: password rules change over time, and an
+// account made under the old rules has to keep working. Checking policy at login
+// locked out every account created before the 8-character minimum existed.
+function validateNewPassword(username, password) {
+  const bad = validateUsername(username);
+  if (bad) return bad;
 
   const pw = String(password);
   if (pw.length < 8) return 'Password must be at least 8 characters';
   if (pw.length > 200) return 'Password is too long';
   if (COMMON_PASSWORDS.has(pw.toLowerCase())) return 'That password is too easy to guess';
   if (/^(.)\1+$/.test(pw)) return 'That password is too easy to guess';
-  if (pw.toLowerCase() === id) return "Password can't be your username";
+  if (pw.toLowerCase() === normalizeId(username)) return "Password can't be your username";
   return null;
 }
 
@@ -693,7 +702,9 @@ const server = http.createServer(async (req, res) => {
   // ---- auth ----
   if (route === '/api/auth/signup' || route === '/api/auth/login') {
     if (throttled(ip, 'auth', 20, 60000)) return sendJSON(res, 429, { ok: false, msg: 'Too many attempts, wait a minute' });
-    const problem = validate(body.username, body.password);
+    const problem = route === '/api/auth/signup'
+      ? validateNewPassword(body.username, body.password)
+      : validateUsername(body.username);
     if (problem) return sendJSON(res, 200, { ok: false, msg: problem });
     const id = normalizeId(body.username);
 
@@ -712,6 +723,8 @@ const server = http.createServer(async (req, res) => {
 
     const u = getUser(id);
     if (!u) return sendJSON(res, 200, { ok: false, msg: 'No account with that username' });
+    // Cheap guard so nobody can make us PBKDF2 a 200KB string 20 times a minute.
+    if (String(body.password || '').length > 200) return sendJSON(res, 200, { ok: false, msg: 'Wrong password' });
     const attempt = await hashPassword(body.password, u.salt, u.iterations);
     if (attempt !== u.hash) return sendJSON(res, 200, { ok: false, msg: 'Wrong password' });
     return sendJSON(res, 200, { ok: true, token: issueToken(id), name: u.name, save: u.save });

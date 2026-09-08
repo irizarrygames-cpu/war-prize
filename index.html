@@ -11,6 +11,7 @@
 
 <!-- ============ SIGN UP / LOG IN ============ -->
 <div id="authScreen" class="screen">
+  <div id="authBg" class="scene-host"></div>
   <h1 class="logo auth-logo">WAR<span>PRIZE</span></h1>
   <div class="auth-box">
     <div class="auth-tabs">
@@ -24,10 +25,7 @@
       <div id="authError" class="auth-error hidden"></div>
       <button id="authSubmit" type="submit" class="play-btn auth-submit">LOG IN</button>
     </form>
-    <div class="auth-note">
-      Your profile and friends follow this account on any device.<br />
-      At least 8 characters, and don't reuse a password from anywhere else.
-    </div>
+    <div class="auth-note" id="authNote"></div>
   </div>
 </div>
 
@@ -42,7 +40,7 @@
     <div class="tb-item tb-pill"><span id="menuCoins">0</span> <span class="ico">🪙</span></div>
   </div>
 
-  <div id="menuBg"></div>
+  <div id="menuBg" class="scene-host"></div>
 
   <div class="menu-hero">
     <div class="sunburst"></div>
@@ -144,6 +142,7 @@
 
 <!-- ============ RESULTS ============ -->
 <div id="resultScreen" class="screen hidden">
+  <div id="resultBg" class="scene-host"></div>
   <div id="victoryFx"></div>
   <div class="result-box">
     <div id="resultTitle">VICTORY!</div>
@@ -173,7 +172,9 @@
 <div id="toast" class="hidden"></div>
 
 <script src="data.js"></script>
+<script src="scenes.js"></script>
 <script src="audio.js"></script>
+<script src="fx.js"></script>
 <script src="save.js"></script>
 <script src="game.js"></script>
 <script src="net.js"></script>

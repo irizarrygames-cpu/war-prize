@@ -38,20 +38,104 @@ body {
   align-items: center;
 }
 
+/* A short or small window used to just chop the bottom off the menu -- the nav
+   buttons and the footer were simply gone, with no way to reach them. Let the
+   column scroll instead. On a normal screen everything still fits and nothing
+   scrolls, because the mode picker's auto margin only eats space that's free. */
+#menuScreen {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+
 /* ================= arena backdrops (flat two-tone) ================= */
 
-body.arena-1,  .arena-bg-1  { background: linear-gradient(180deg, #7ec8f0 0 40%, #4a8a3a 40%); }
-body.arena-2,  .arena-bg-2  { background: linear-gradient(180deg, #e8c27a 0 40%, #b5793f 40%); }
-body.arena-3,  .arena-bg-3  { background: linear-gradient(180deg, #ff9d6c 0 40%, #4a3a6b 40%); }
-body.arena-4,  .arena-bg-4  { background: linear-gradient(180deg, #6fd6e8 0 40%, #1e6f96 40%); }
-body.arena-5,  .arena-bg-5  { background: linear-gradient(180deg, #7a2020 0 40%, #d94f16 40%); }
-body.arena-6,  .arena-bg-6  { background: linear-gradient(180deg, #10143a 0 40%, #2a2f6b 40%); }
-body.arena-7,  .arena-bg-7  { background: linear-gradient(180deg, #e8d49a 0 40%, #8a5f2a 40%); }
-body.arena-8,  .arena-bg-8  { background: linear-gradient(180deg, #1a0f4a 0 40%, #6a1bd1 40%); }
-body.arena-9,  .arena-bg-9  { background: linear-gradient(180deg, #2a1a4a 0 40%, #120a22 40%); }
-body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%, #b8412f 40%); }
+/* Three hard bands each, not two: a sky, a strip at the horizon and a ground. The
+   middle band is what stops ten arenas reading as "same picture, other colour" --
+   it sets the depth and it's where each place shows its own material. The split
+   points differ per arena too, so the horizon sits somewhere different every time.
+   Hard stops only; these are bands of flat colour, never shading. */
+body.arena-1,  .arena-bg-1  { background: linear-gradient(180deg, #7ec8f0 0 37%, #5fa63f 37% 45%, #4a8a3a 45%); }
+body.arena-2,  .arena-bg-2  { background: linear-gradient(180deg, #e8c27a 0 40%, #cf9a4e 40% 47%, #b5793f 47%); }
+body.arena-3,  .arena-bg-3  { background: linear-gradient(180deg, #ff9d6c 0 33%, #a0577f 33% 44%, #4a3a6b 44%); }
+body.arena-4,  .arena-bg-4  { background: linear-gradient(180deg, #6fd6e8 0 41%, #2e97be 41% 49%, #1e6f96 49%); }
+body.arena-5,  .arena-bg-5  { background: linear-gradient(180deg, #7a2020 0 35%, #b8331a 35% 46%, #d94f16 46%); }
+body.arena-6,  .arena-bg-6  { background: linear-gradient(180deg, #10143a 0 43%, #1c2154 43% 53%, #2a2f6b 53%); }
+body.arena-7,  .arena-bg-7  { background: linear-gradient(180deg, #e8d49a 0 38%, #6f8f3a 38% 49%, #8a5f2a 49%); }
+body.arena-8,  .arena-bg-8  { background: linear-gradient(180deg, #1a0f4a 0 45%, #3d1a8a 45% 55%, #6a1bd1 55%); }
+body.arena-9,  .arena-bg-9  { background: linear-gradient(180deg, #2a1a4a 0 39%, #1a1030 39% 52%, #120a22 52%); }
+body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%, #d4642a 35% 48%, #b8412f 48%); }
 
 #arenaBg { position: absolute; inset: 0; z-index: 0; }
+
+/* ================= arena scenery ================= */
+
+/* Pinned to the viewport, never to the scrolling column, so the scene holds still
+   while a short window scrolls. pointer-events off everywhere -- scenery must
+   never eat a tap meant for a button. */
+.scene-host {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  --u: min(1vmin, 4.4px);
+}
+#arenaBg.scene-host { position: absolute; }
+
+.prop { position: absolute; }
+.prop-in { display: block; }
+.prop svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.prop:not(.band) svg { height: auto; }
+
+/* One outline weight for the whole scene regardless of how big a prop is drawn --
+   that's what non-scaling-stroke buys us. */
+.scene-host svg * { vector-effect: non-scaling-stroke; }
+.scene-host .sil {
+  fill: var(--outline);
+  stroke: var(--outline);
+  stroke-width: 7;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* Scenery sits behind the game, so it stays quiet: never fully opaque, and dimmer
+   still on the match screen where cards have to read instantly. */
+#menuBg .prop, #authBg .prop { opacity: 0.92; }
+#resultBg .prop { opacity: 0.6; }
+#arenaBg .prop { opacity: 0.55; }
+
+@keyframes propDrift { from { transform: translateX(-5vmin); } to { transform: translateX(5vmin); } }
+@keyframes propBob   { from { transform: translateY(0); }      to { transform: translateY(-2vmin); } }
+@keyframes propSway  { from { transform: rotate(-2.5deg); }    to { transform: rotate(2.5deg); } }
+@keyframes propSpin  { to   { transform: rotate(360deg); } }
+@keyframes propTwinkle { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
+@keyframes propRise {
+  0%   { transform: translateY(2vmin) scale(1); opacity: 0; }
+  15%  { opacity: 1; }
+  100% { transform: translateY(-24vmin) scale(0.4); opacity: 0; }
+}
+@keyframes propFall {
+  0%   { transform: translateY(-6vmin) rotate(0deg); opacity: 0; }
+  10%  { opacity: 1; }
+  100% { transform: translateY(34vmin) rotate(260deg); opacity: 0; }
+}
+
+.fx-drift   { animation: propDrift   var(--dur, 34s) ease-in-out infinite alternate; }
+.fx-bob     { animation: propBob     var(--dur, 5s)  ease-in-out infinite alternate; }
+.fx-sway    { animation: propSway    var(--dur, 6s)  ease-in-out infinite alternate; transform-origin: 50% 100%; }
+.fx-spin    { animation: propSpin    var(--dur, 90s) linear infinite; }
+.fx-twinkle { animation: propTwinkle var(--dur, 4s)  ease-in-out infinite; }
+.fx-rise    { animation: propRise    var(--dur, 8s)  linear infinite; }
+.fx-fall    { animation: propFall    var(--dur, 10s) linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-host .prop-in { animation: none !important; }
+}
+
+@media (max-width: 560px) {
+  .scene-host .sil { stroke-width: 5; }
+}
 
 /* ================= shared chunky pieces ================= */
 
@@ -106,24 +190,12 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%,
 }
 #menuLevelFill { height: 100%; background: #6fd6ff; }
 
-/* drifting cards behind the menu, purely decorative */
-#menuBg { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-.drift-card {
-  position: absolute;
-  width: 54px; height: 78px;
-  border: 3px solid var(--outline);
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  font-size: 28px;
-  font-weight: 900;
-  color: var(--outline);
-  background: #fdfdff;
-  opacity: 0.16;
-  animation: drift linear infinite;
-}
+/* One fluid spacing step drives the whole menu. Every gap and size below is a
+   multiple of it, so a small phone shrinks the layout evenly instead of keeping
+   desktop padding and pushing the nav off the bottom. */
+#menuScreen { --sp: clamp(6px, 1.6vh, 16px); }
 
-.menu-hero { position: relative; z-index: 1; margin-top: 14px; text-align: center; }
+.menu-hero { position: relative; z-index: 1; margin-top: var(--sp); text-align: center; }
 
 .sunburst {
   position: absolute;
@@ -141,12 +213,12 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%,
 
 /* arena panel on the menu -- fills the dead space and shows the climb */
 .arena-card {
-  margin: 16px auto 0;
+  margin: var(--sp) auto 0;
   width: min(92vw, 330px);
   background: var(--panel);
   border: 4px solid var(--outline);
   border-radius: 16px;
-  padding: 11px 14px 12px;
+  padding: clamp(7px, 1.1vh, 11px) 14px clamp(8px, 1.2vh, 12px);
   box-shadow: 0 6px 0 var(--outline);
 }
 .arena-card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
@@ -190,7 +262,9 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%,
 }
 
 .logo {
-  font-size: clamp(44px, 9vw, 84px);
+  /* Scales on height as well as width -- on a short laptop window the old
+     width-only rule kept a 84px logo and ate the room the nav needed. */
+  font-size: clamp(34px, min(9vw, 9vh), 84px);
   font-weight: 900;
   letter-spacing: 4px;
   line-height: 0.9;
@@ -210,21 +284,26 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%,
   flex: none;
 }
 .avatar.big {
-  width: 76px; height: 76px;
-  font-size: 42px;
+  width: clamp(52px, 8vh, 76px); height: clamp(52px, 8vh, 76px);
+  font-size: clamp(28px, 4.4vh, 42px);
   border-radius: 18px;
   box-shadow: 0 5px 0 var(--outline);
 }
 
-.menu-player { display: flex; align-items: center; gap: 14px; justify-content: center; margin-top: 22px; }
+.menu-player {
+  display: flex; align-items: center; justify-content: center;
+  gap: clamp(8px, 2.6vw, 14px);
+  margin-top: calc(var(--sp) * 1.2);
+}
 .menu-player-txt { text-align: left; }
 .menu-name {
-  font-size: 30px; font-weight: 900; letter-spacing: 1px;
+  font-size: clamp(21px, 3.6vh, 30px); font-weight: 900; letter-spacing: 1px;
   -webkit-text-stroke: 4px var(--outline);
   paint-order: stroke fill;
+  max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .menu-title {
-  color: var(--gold); font-weight: 900; font-size: 14px;
+  color: var(--gold); font-weight: 900; font-size: clamp(11px, 1.8vh, 14px);
   letter-spacing: 1.5px; text-transform: uppercase;
   -webkit-text-stroke: 3px var(--outline);
   paint-order: stroke fill;
@@ -247,46 +326,58 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%,
   letter-spacing: 1px;
 }
 
+/* A grid, not a wrapping flex row. Wrapping made the layout jump between one and
+   two rows depending on how wide the labels rendered; three equal columns are the
+   same shape on every screen and never spill off the side. */
 .mode-picker {
   position: relative;
   z-index: 1;
   margin-top: auto;
-  display: flex;
-  gap: 9px;
-  justify-content: center;
-  flex-wrap: wrap;
+  width: 100%;
+  max-width: 480px;
+  padding: 0 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(6px, 1.4vw, 9px);
 }
 .mode-btn {
   background: var(--panel);
   border: 3px solid var(--outline);
   color: var(--txt);
   border-radius: 14px;
-  padding: 8px 16px;
+  padding: clamp(6px, 1vh, 8px) 6px;
   cursor: pointer;
   box-shadow: 0 5px 0 var(--outline);
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 2px;
-  min-width: 92px;
+  min-width: 0;
   transition: transform 0.06s, box-shadow 0.06s;
 }
-.mode-btn strong { font-size: 15px; font-weight: 900; letter-spacing: 1px; }
-.mode-btn small { font-size: 9px; font-weight: 800; letter-spacing: 0.8px; color: var(--dim); text-transform: uppercase; }
+.mode-btn strong { font-size: clamp(13px, 3.4vw, 15px); font-weight: 900; letter-spacing: 1px; }
+.mode-btn small {
+  font-size: clamp(8px, 2vw, 9px); font-weight: 800; letter-spacing: 0.6px;
+  color: var(--dim); text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
 .mode-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--outline); }
 .mode-btn.active { background: var(--gold); color: #3a2400; }
 .mode-btn.active small { color: #6b4a00; }
 
 .play-btn {
-  margin-top: 14px;
+  position: relative;
+  z-index: 1;
+  margin-top: var(--sp, 14px);
   background: var(--gold);
   color: #3a2400;
   border: 4px solid var(--outline);
   border-radius: 18px;
-  font-size: 34px;
+  font-size: clamp(24px, 6.4vw, 34px);
   font-weight: 900;
   letter-spacing: 3px;
-  padding: 16px 76px;
+  padding: clamp(11px, 1.9vh, 16px) clamp(44px, 14vw, 76px);
   cursor: pointer;
   box-shadow: 0 8px 0 var(--gold-dk), 0 8px 0 4px var(--outline);
   transition: transform 0.06s, box-shadow 0.06s;
@@ -297,12 +388,21 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%,
   box-shadow: 0 2px 0 var(--gold-dk), 0 2px 0 4px var(--outline);
 }
 
+/* Six columns where there's room, three where there isn't -- a fixed grid either
+   way, so the row count never depends on how a label happens to measure. */
 .menu-nav {
-  display: flex;
-  gap: 10px;
-  margin: 26px 0 12px;
-  flex-wrap: wrap;
-  justify-content: center;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: clamp(6px, 1.4vw, 10px);
+  margin: calc(var(--sp) * 1.4) 0 var(--sp);
+  width: 100%;
+  max-width: 640px;
+  padding: 0 10px;
+}
+@media (max-width: 620px) {
+  .menu-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 420px; }
 }
 
 .nav-btn {
@@ -310,21 +410,22 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%,
   background: var(--panel);
   color: var(--txt);
   border-radius: 14px;
-  padding: 9px 16px;
+  padding: clamp(6px, 1.1vh, 9px) 4px;
   font-weight: 900;
-  font-size: 11px;
-  letter-spacing: 1px;
+  font-size: clamp(9px, 2.4vw, 11px);
+  letter-spacing: 0.6px;
   text-transform: uppercase;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  min-width: 80px;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
   box-shadow: 0 5px 0 var(--outline);
   transition: transform 0.06s, box-shadow 0.06s, background 0.12s;
 }
-.nav-btn span { font-size: 20px; }
+.nav-btn span { font-size: clamp(16px, 4.6vw, 20px); }
 .nav-btn:hover { background: var(--panel-2); }
 .nav-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--outline); }
 
@@ -337,18 +438,35 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%,
 }
 
 .menu-foot {
+  position: relative;
+  z-index: 1;
   font-size: 12px; font-weight: 800; letter-spacing: 0.6px;
-  padding-bottom: 14px; text-align: center;
+  padding: 0 14px 14px; text-align: center;
+  max-width: 620px;
   -webkit-text-stroke: 3px var(--outline);
   paint-order: stroke fill;
+}
+
+.topbar { position: relative; z-index: 2; padding: clamp(8px, 1.6vh, 14px) 16px; }
+
+/* The very shortest windows can't hold the rules text as well as the game itself,
+   and the rules are the least important thing on the screen. */
+@media (max-height: 656px) {
+  .menu-foot { display: none; }
+  .sunburst { top: 30px; width: 420px; height: 420px; }
 }
 
 /* ================= sign up / log in ================= */
 
 #authScreen { justify-content: center; gap: 26px; }
-.auth-logo { font-size: clamp(38px, 7vw, 64px); }
+/* Both need a layer of their own: the scenery behind them is positioned, and a
+   positioned element paints over static siblings whatever the source order says --
+   without this a backyard tree sat on top of the username field. */
+.auth-logo { font-size: clamp(38px, 7vw, 64px); position: relative; z-index: 1; }
 
 .auth-box {
+  position: relative;
+  z-index: 1;
   background: var(--panel);
   border: 5px solid var(--outline);
   border-radius: 22px;
@@ -576,6 +694,173 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%,
 .sb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-score { font-weight: 900; font-size: 17px; font-variant-numeric: tabular-nums; }
 
+/* On a phone the four-row scoreboard reached down over the top player's name plate.
+   Names are already on the plates, so the phone version drops them and lays the
+   scores out as a short row of chips that clears the table. */
+@media (max-width: 620px) {
+  #scoreboard { display: flex; gap: 4px; padding: 4px 5px; min-width: 0; }
+  .sb-row { flex-direction: column; gap: 0; padding: 3px 5px; }
+  .sb-name { display: none; }
+  .sb-av { font-size: 14px; }
+  .sb-score { font-size: 13px; }
+}
+
+/* ================= effects =================
+   All of these are solid shapes that move and scale. Nothing here uses a blur, a
+   glow or a gradient -- the punch comes from how fast they grow and fade. */
+
+.fx-ring, .fx-spike, .fx-dust, .fx-confetti, .fx-float, .fx-stamp,
+.fx-crown, .fx-speed, .fx-fly {
+  position: fixed;
+  pointer-events: none;
+  z-index: 60;
+}
+
+.fx-ring {
+  border-style: solid;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0.1);
+  animation: fxRing ease-out forwards;
+}
+@keyframes fxRing {
+  0%   { transform: translate(-50%, -50%) scale(0.1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+
+.fx-spike {
+  border: 3px solid var(--outline);
+  border-radius: 3px;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  transform: translate(-50%, -50%) rotate(var(--a)) scale(1);
+  animation: fxSpike ease-out forwards;
+}
+@keyframes fxSpike {
+  0%   { transform: translate(-50%, -50%) translate(0, 0) rotate(var(--a)) scale(0.4); opacity: 1; }
+  100% { transform: translate(-50%, -50%) translate(var(--dx), var(--dy)) rotate(var(--a)) scale(0.9); opacity: 0; }
+}
+
+.fx-dust {
+  border: 3px solid var(--outline);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: fxDust ease-out forwards;
+}
+@keyframes fxDust {
+  0%   { transform: translate(-50%, -50%) translate(0, 0) scale(0.3); opacity: 0.9; }
+  100% { transform: translate(-50%, -50%) translate(var(--dx), var(--dy)) scale(1.3); opacity: 0; }
+}
+
+.fx-confetti {
+  border: 2px solid var(--outline);
+  border-radius: 2px;
+  transform: translate(-50%, -50%);
+  animation: fxConfetti linear forwards;
+}
+@keyframes fxConfetti {
+  0%   { transform: translate(-50%, -50%) translate(0, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate(-50%, -50%) translate(var(--dx), var(--dy)) rotate(var(--rot)); opacity: 0; }
+}
+
+.fx-float {
+  font-weight: 900;
+  font-size: 26px;
+  letter-spacing: 1px;
+  -webkit-text-stroke: 5px var(--outline);
+  paint-order: stroke fill;
+  transform: translate(-50%, -50%);
+  animation: fxFloat 1.1s cubic-bezier(0.2, 1.6, 0.4, 1) forwards;
+}
+.fx-float-gold { color: var(--gold); }
+.fx-float-bad  { color: var(--bad); }
+.fx-float-good { color: var(--good); }
+.fx-float-cool { color: #6fd6ff; }
+@keyframes fxFloat {
+  0%   { transform: translate(-50%, -50%) translateY(0) scale(0.4); opacity: 0; }
+  25%  { transform: translate(-50%, -50%) translateY(-14px) scale(1.15); opacity: 1; }
+  70%  { transform: translate(-50%, -50%) translateY(-34px) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) translateY(-58px) scale(0.9); opacity: 0; }
+}
+
+.fx-stamp {
+  font-weight: 900;
+  font-size: 58px;
+  -webkit-text-stroke: 7px var(--outline);
+  paint-order: stroke fill;
+  transform: translate(-50%, -50%);
+  animation: fxStamp 0.9s cubic-bezier(0.2, 1.8, 0.3, 1) forwards;
+}
+.fx-stamp-bad { color: var(--bad); }
+@keyframes fxStamp {
+  0%   { transform: translate(-50%, -50%) scale(2.6) rotate(-22deg); opacity: 0; }
+  22%  { transform: translate(-50%, -50%) scale(1) rotate(-12deg); opacity: 1; }
+  70%  { transform: translate(-50%, -50%) scale(1) rotate(-12deg); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.15) rotate(-12deg); opacity: 0; }
+}
+
+.fx-crown {
+  font-size: 40px;
+  transform: translate(-50%, -50%);
+  animation: fxCrown 1.2s cubic-bezier(0.2, 1.7, 0.4, 1) forwards;
+}
+@keyframes fxCrown {
+  0%   { transform: translate(-50%, -160%) scale(0.4) rotate(-30deg); opacity: 0; }
+  30%  { transform: translate(-50%, -95%) scale(1.1) rotate(6deg); opacity: 1; }
+  45%  { transform: translate(-50%, -78%) scale(1) rotate(0deg); }
+  80%  { transform: translate(-50%, -78%) scale(1) rotate(0deg); opacity: 1; }
+  100% { transform: translate(-50%, -120%) scale(0.9); opacity: 0; }
+}
+
+.fx-speed {
+  height: 6px;
+  border-radius: 3px;
+  opacity: 0;
+  animation: fxSpeed 0.6s ease-out forwards;
+}
+@keyframes fxSpeed {
+  0%   { transform: translateX(calc(var(--dir) * -120px)) scaleX(0.4); opacity: 0; }
+  35%  { opacity: 0.85; }
+  100% { transform: translateX(calc(var(--dir) * 220px)) scaleX(1); opacity: 0; }
+}
+
+.fx-fly {
+  font-size: 30px;
+  font-weight: 900;
+  transform: translate(-50%, -50%);
+  animation: fxFly cubic-bezier(0.4, 0, 0.5, 1) forwards;
+  z-index: 120;
+}
+@keyframes fxFly {
+  0%   { transform: translate(-50%, -50%) translate(0, 0) scale(0.5); opacity: 0; }
+  18%  { transform: translate(-50%, -50%) translate(calc(var(--dx) * 0.18), calc(var(--dy) * 0.18 - 40px)) scale(1.2); opacity: 1; }
+  100% { transform: translate(-50%, -50%) translate(var(--dx), var(--dy)) scale(0.6); opacity: 0; }
+}
+
+/* the revealed number thumps once so your eye lands on it */
+.card.pop-num .card-num { animation: fxNumPop 0.42s cubic-bezier(0.2, 1.9, 0.35, 1); }
+@keyframes fxNumPop {
+  0%   { transform: scale(0.5); }
+  55%  { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+.seat.seat-in { animation: fxSeatIn 0.42s cubic-bezier(0.2, 1.7, 0.4, 1); }
+@keyframes fxSeatIn {
+  0%   { transform: scale(0.5); opacity: 0; }
+  60%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+.reward.pop-in { animation: fxChip 0.5s cubic-bezier(0.2, 1.8, 0.35, 1); }
+@keyframes fxChip {
+  0%   { transform: scale(0.3) rotate(-10deg); opacity: 0; }
+  55%  { transform: scale(1.18) rotate(3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-ring, .fx-spike, .fx-dust, .fx-confetti, .fx-speed { display: none; }
+}
+
 /* --- table (flat, straight-on) --- */
 
 #table {
@@ -584,7 +869,11 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%,
   flex: 1 1 auto;
   min-height: 0;
   width: min(calc(100% - 32px), 880px);
-  margin: 58px 0 24px;
+  /* Sized against the window rather than fixed, because the hand takes ~130px more
+     room once cards are dealt. With fixed margins the table lost that height, the
+     bottom seat's row got shorter than the seat, and your own name plate slid out
+     of the table and landed on top of the hand label. */
+  margin: clamp(36px, 6.4vh, 58px) 0 clamp(8px, 2.4vh, 24px);
   display: grid;
   grid-template-columns: 1fr 1.3fr 1fr;
   grid-template-rows: 1fr 1.2fr 1fr;
@@ -599,6 +888,16 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%,
   box-shadow: 0 9px 0 var(--outline);
 }
 
+/* Phones: start the table below the HUD so the timer and scores never sit on the
+   top player, and give the side seats more of the width than the prize column. */
+@media (max-width: 620px) {
+  #table {
+    margin-top: 64px;
+    width: calc(100% - 16px);
+    grid-template-columns: 1fr minmax(58px, 0.72fr) 1fr;
+  }
+}
+
 /* flat table skins */
 .tbl-wooden { background: repeating-linear-gradient(90deg, #8a5a2b 0 34px, #7a4d24 34px 68px); }
 .tbl-marble { background: repeating-linear-gradient(135deg, #e6e4df 0 44px, #d2cfc8 44px 88px); }
@@ -611,12 +910,17 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%,
 .tbl-cyber  { background: repeating-linear-gradient(90deg, #0d6b7a 0 34px, #0a5a67 34px 68px); }
 .tbl-royal  { background: repeating-linear-gradient(90deg, #9c1339 0 34px, #85102f 34px 68px); }
 
+/* min-width:0 / max-width:100% keep a seat inside its grid column. Without them a
+   long opponent name made the plate wider than the column and it ran off the side
+   of a phone, so you couldn't read their name or their score. */
 .seat {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: clamp(5px, 1.2vh, 14px);
   position: relative;
+  min-width: 0;
+  max-width: 100%;
   transition: opacity 0.25s;
 }
 /* Each seat's played card sits on the side nearest the middle of the table. */
@@ -631,20 +935,28 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%,
 .seat-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: clamp(4px, 1.4vw, 8px);
   background: var(--panel);
   border-radius: 14px;
-  padding: 4px 12px 4px 5px;
+  padding: 4px clamp(6px, 2.4vw, 12px) 4px 5px;
   box-shadow: 0 4px 0 var(--outline);
+  max-width: 100%;
+  min-width: 0;
 }
 .seat.you .seat-info { background: var(--gold); color: #3a2400; }
 .seat.you .seat-score { color: #3a2400; }
-.seat-info .avatar { width: 34px; height: 34px; font-size: 19px; border-radius: 9px; border-width: 3px; }
-.seat-meta { line-height: 1.15; }
-.seat-name { font-size: 12px; font-weight: 900; letter-spacing: 0.6px; max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.seat-score { font-size: 19px; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; }
+.seat-info .avatar {
+  width: clamp(24px, 7vw, 34px); height: clamp(24px, 7vw, 34px);
+  font-size: clamp(14px, 4vw, 19px); border-radius: 9px; border-width: 3px;
+}
+.seat-meta { line-height: 1.15; min-width: 0; flex: 1; }
+.seat-name {
+  font-size: clamp(10px, 2.6vw, 12px); font-weight: 900; letter-spacing: 0.4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.seat-score { font-size: clamp(14px, 4vw, 19px); font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; }
 
-.seat-card-slot { height: 84px; display: grid; place-items: center; }
+.seat-card-slot { height: clamp(56px, 10.6vh, 84px); display: grid; place-items: center; }
 
 .seat-reaction {
   position: absolute;
@@ -849,8 +1161,8 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%,
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 4px 0 10px;
+  gap: clamp(3px, 0.8vh, 6px);
+  padding: 2px 0 clamp(4px, 1.4vh, 10px);
 }
 #handArea.spectating #handCards { display: none; }
 
@@ -1408,10 +1720,6 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%,
   100% { transform: translate(-24px, 22px) rotate(-16deg); opacity: 0; }
 }
 @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
-@keyframes drift {
-  0%   { transform: translateY(110vh) rotate(var(--r0)); }
-  100% { transform: translateY(-30vh) rotate(var(--r1)); }
-}
 @keyframes flashHit {
   0%   { opacity: 0.45; }
   100% { opacity: 0; }
@@ -1507,21 +1815,44 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 40%,
   100% { opacity: 0; }
 }
 
-/* ================= responsive ================= */
+/* ================= responsive =================
+   These come last in the file, so anything set here beats the fluid clamp values
+   above. Keep that in mind: only put things here that genuinely need a hard
+   override, or the clamps silently stop working. The menu is handled entirely by
+   the clamps and needs nothing here.
+
+   The match screen does need help, because its height budget is not negotiable:
+   three table rows plus the hand have to fit with no scrolling, and a seat row can
+   never shrink below its own contents. On a short window the cards themselves have
+   to get smaller -- otherwise the bottom seat's name plate is pushed out of the
+   table and onto the hand. */
 
 @media (max-width: 720px) {
-  #table { grid-template-columns: 0.8fr 1.4fr 0.8fr; }
-  .card { width: 52px; height: 76px; }
-  .hand-card .card { width: 70px; height: 100px; }
-  .seat-card-slot { height: 78px; }
   #scoreboard { min-width: 150px; }
-  .play-btn { font-size: 27px; padding: 14px 52px; }
   .mm-slot { width: 78px; }
 }
 
-@media (max-height: 660px) {
-  .seat-card-slot { height: 74px; }
+@media (max-height: 780px) {
+  .seat-card-slot { height: 66px; }
   .card { width: 50px; height: 72px; }
-  .logo { font-size: 40px; }
-  .avatar.big { width: 58px; height: 58px; font-size: 32px; }
+  .hand-card .card { width: 66px; height: 94px; }
+}
+
+@media (max-height: 680px) {
+  .seat-card-slot { height: 56px; }
+  .card { width: 43px; height: 62px; }
+  .hand-card .card { width: 58px; height: 84px; }
+  .seat-info { padding: 2px 8px 2px 4px; }
+  .seat-info .avatar { width: 24px; height: 24px; font-size: 14px; }
+  .seat-name { font-size: 10px; }
+  .seat-score { font-size: 14px; }
+  #matchTimer { font-size: 22px; padding: 5px 14px; }
+  .hand-label { font-size: 11px; }
+  #peekBtn { transform: scale(0.88); }
+}
+
+@media (max-height: 580px) {
+  .seat-card-slot { height: 46px; }
+  .card { width: 36px; height: 52px; }
+  .hand-card .card { width: 50px; height: 72px; }
 }

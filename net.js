@@ -273,7 +273,8 @@ function startOnlineMatch(info) {
 
   show('matchScreen');
   const ar = arenaFor(SAVE.trophies);
-  $('arenaBg').className = 'arena-bg-' + ar.n;
+  $('arenaBg').className = 'scene-host arena-bg-' + ar.n;
+  paintScene($('arenaBg'), ar.n);
   $('table').className = 'tbl-' + SAVE.equipped.table;
   $('suddenDeath').classList.add('hidden');
   $('matchTimer').classList.remove('urgent');
@@ -291,6 +292,20 @@ function startOnlineMatch(info) {
     M.players.forEach(p => { p.seat.querySelector('.seat-score').textContent = p.score; });
   }
   updateScoreboard();
+
+  if (!info.resync) {
+    SFX.matchFound();
+    // Each seat pops in behind its own little burst, so the table assembles rather
+    // than just appearing.
+    M.players.forEach((p, i) => later(() => {
+      const c = FX.centreOf(p.seat.querySelector('.seat-info'));
+      FX.ring(c.x, c.y, { size: 150, color: i === 0 ? '#ffc93c' : '#ffffff', life: 420, thick: 5 });
+      p.seat.classList.remove('seat-in');
+      void p.seat.offsetWidth;
+      p.seat.classList.add('seat-in');
+      SFX.rewardChip(i % 3);
+    }, 120 + i * 110));
+  }
 
   SFX.startMusic();
   M.tickTimer = setInterval(tickClock, 150);
@@ -389,6 +404,10 @@ function onlineReveal(d) {
   shake(true);
   later(() => { ct.textContent = ''; ct.className = ''; }, 700);
 
+  const mid = FX.centreOf($('centerArea'));
+  FX.ring(mid.x, mid.y, { size: 340, color: '#ffffff', life: 460, thick: 9 });
+  FX.burst(mid.x, mid.y, { n: 12, color: '#ff4d6d', dist: 150, size: 14 });
+
   const revealed = [];
   d.cards.forEach((c, n) => {
     const p = M.players[localIndex(c.seat)];
@@ -400,7 +419,18 @@ function onlineReveal(d) {
     const card = makeCard(p.cardBack, c.card);
     slot.appendChild(card);
     p.seat.classList.remove('ready');
-    requestAnimationFrame(() => { card.classList.add('flipped', 'slam'); SFX.slam(n); });
+    requestAnimationFrame(() => {
+      card.classList.add('flipped', 'slam');
+      SFX.slam(n);
+      // The card lands a beat after the flip starts -- that's when it should hit.
+      later(() => {
+        const cc = FX.centreOf(card);
+        FX.dust(cc.x, cc.y + cc.h / 2, { n: 6 });
+        FX.ring(cc.x, cc.y, { size: 130, color: '#ffffff', life: 340, thick: 5 });
+        card.classList.add('pop-num');
+        SFX.cardLand(n);
+      }, 180 + n * 50);
+    });
   });
 
   later(() => {
@@ -493,12 +523,51 @@ function onlineMatchEnd(d) {
     if (rewards.arenaDown) extras.appendChild(el('div', 'extra demote', `ARENA LOST — back to ${rewards.arenaDown.name}`));
   }
 
+  // Trophies may have just moved you between arenas, so read it after the rewards.
+  paintScene($('resultBg'), arenaFor(SAVE.trophies).n);
   show('resultScreen');
   $('matchScreen').classList.remove('sudden-mode');
   if (d.place === 0) { SFX.victory(); playVictoryFx(SAVE.equipped.victory); }
   else SFX.defeat();
   setTimeout(() => SFX.trophy(), 900);
+
+  if (rewards) playRewardFx(rewards);
   M = null;
+}
+
+// The reward chips pop in one at a time and the coins fly up to the counter, so a
+// win reads as things being handed to you rather than three numbers appearing.
+function playRewardFx(rewards) {
+  const chips = [$('rewardTrophy'), $('rewardXp'), $('rewardCoins')];
+  chips.forEach((chip, i) => {
+    chip.classList.remove('pop-in');
+    later(() => {
+      void chip.offsetWidth;
+      chip.classList.add('pop-in');
+      const c = FX.centreOf(chip);
+      FX.ring(c.x, c.y, { size: 120, color: i === 0 ? '#ffc93c' : i === 1 ? '#6fd6ff' : '#ffd75e', life: 400, thick: 5 });
+      SFX.rewardChip(i);
+    }, 500 + i * 260);
+  });
+
+  later(() => FX.rewardRain($('menuCoins'), '🪙', Math.min(6, Math.ceil(rewards.coins / 8))), 1400);
+
+  if (rewards.levelsGained) {
+    later(() => {
+      SFX.levelUp();
+      FX.confetti(innerWidth / 2, innerHeight * 0.4, { n: 30 });
+      FX.speedLines('#6fd6ff');
+    }, 1900);
+  }
+  if (rewards.arenaUp) {
+    later(() => {
+      SFX.arenaUp();
+      FX.confetti(innerWidth / 2, innerHeight * 0.35, { n: 40 });
+      FX.ring(innerWidth / 2, innerHeight / 2, { size: Math.max(innerWidth, innerHeight), color: '#ffc93c', life: 700, thick: 10 });
+    }, 2300);
+  } else if (rewards.arenaDown) {
+    later(() => SFX.arenaDown(), 2300);
+  }
 }
 
 function netPick(index) { api('match/pick', { index }); }
@@ -510,6 +579,10 @@ function netPick(index) { api('match/pick', { index }); }
     enterGame();
     connectEvents();
   } else {
+    // Nobody's signed in yet, so there's no arena to show -- give the sign-in
+    // screen the first one, which is where a new player is headed anyway.
+    document.body.className = 'arena-1';
+    paintScene($('authBg'), 1);
     setAuthMode('login');
     show('authScreen');
   }

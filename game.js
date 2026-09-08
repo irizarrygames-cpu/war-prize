@@ -104,17 +104,7 @@ function renderModePicker() {
 }
 
 function buildMenuBackdrop() {
-  const bg = $('menuBg');
-  if (bg.children.length) return;          // decorative only, build once
-  for (let i = 0; i < 9; i++) {
-    const c = el('div', 'drift-card', String(randInt(CARD_MIN, CARD_MAX)));
-    c.style.left = randInt(-2, 94) + '%';
-    c.style.animationDuration = randInt(26, 52) + 's';
-    c.style.animationDelay = '-' + randInt(0, 40) + 's';
-    c.style.setProperty('--r0', randInt(-40, 40) + 'deg');
-    c.style.setProperty('--r1', randInt(-40, 40) + 'deg');
-    bg.appendChild(c);
-  }
+  paintScene($('menuBg'), arenaFor(SAVE.trophies).n);
 }
 
 /* ---------------- panels ---------------- */
@@ -124,6 +114,7 @@ let currentPanel = null;
 // Takes a builder rather than a node so buying or equipping can rebuild the whole
 // panel -- rebuilding just one grid would drop the panel's other sections.
 function openPanel(title, build) {
+  const fresh = !currentPanel || currentPanel.title !== title;
   currentPanel = { title, build };
   $('panelTitle').textContent = title;
   const body = $('panelBody');
@@ -132,6 +123,7 @@ function openPanel(title, build) {
   body.appendChild(build());
   body.scrollTop = scroll;
   $('panelWrap').classList.remove('hidden');
+  if (fresh) SFX.panelOpen();          // silent on a rebuild after buying something
 }
 
 function refreshPanel() {
@@ -139,6 +131,7 @@ function refreshPanel() {
 }
 
 function closePanel() {
+  if (currentPanel) SFX.panelClose();
   currentPanel = null;
   $('panelWrap').classList.add('hidden');
   renderMenu();
@@ -521,11 +514,17 @@ async function usePeek() {
     const hand = el('div', 'peek-hand', '🤏');
     wrap.appendChild(hand);
     wrap.classList.add('peeking');
-    SFX.whoosh();
-    setTimeout(() => SFX.select(), 180);
+    SFX.peek();
     setTimeout(() => hand.remove(), 1100);
     wrap.querySelector('.hand-tag').textContent = 'SEEN';
     wrap.querySelector('.hand-tag').classList.add('known');
+
+    const c = FX.centreOf(card);
+    FX.ring(c.x, c.y, { size: 150, color: '#6fd6ff', life: 460, thick: 6 });
+    setTimeout(() => {
+      FX.floatText(c.x, c.y - 60, String(res.card), 'cool');
+      SFX.peekReveal(res.card);
+    }, 240);
   }
   renderPeekButton();
 }
@@ -568,13 +567,18 @@ function paintResolution(players, winner, gained, potAfter) {
   players.forEach(p => {
     if (counts[p.card] > 1) {
       p.cancelled = true;
-      p.seat.querySelector('.card').classList.add('cancelled');
+      const card = p.seat.querySelector('.card');
+      card.classList.add('cancelled');
+      FX.stamp(card, '✕', 'bad');
     }
   });
   if (players.some(p => p.cancelled)) {
     SFX.cancel();
     flash('red');
     shake(false);
+    const clash = players.filter(p => p.cancelled);
+    const c = FX.centreOf(clash[0].seat.querySelector('.card'));
+    FX.floatText(c.x, c.y - 44, 'CANCELLED', 'bad');
   }
 
   if (winner) {
@@ -582,9 +586,21 @@ function paintResolution(players, winner, gained, potAfter) {
     winner.seat.querySelector('.card').classList.add('winner');
     $('prizeCount').classList.add('hidden');
 
-    const wc = winner.seat.querySelector('.card').getBoundingClientRect();
-    sparkBurst(wc.left + wc.width / 2, wc.top + wc.height / 2, gained > 1 ? 18 : 10, '#ffc93c');
-    if (gained > 1) { flash('gold'); shake(true); SFX.bigWin(gained); }
+    const wcard = winner.seat.querySelector('.card');
+    const wc = FX.centreOf(wcard);
+    sparkBurst(wc.x, wc.y, gained > 1 ? 18 : 10, '#ffc93c');
+    FX.ring(wc.x, wc.y, { size: gained > 1 ? 300 : 190, color: '#ffc93c', life: 520, thick: 8 });
+    FX.burst(wc.x, wc.y, { n: gained > 1 ? 14 : 8, color: '#ffd75e', dist: gained > 1 ? 170 : 110 });
+    if (gained > 1) {
+      // Only for a stacked pot. On an ordinary one-card round it fired every few
+      // seconds and stopped meaning anything.
+      FX.crown(winner.seat.querySelector('.seat-info'));
+      flash('gold');
+      shake(true);
+      SFX.bigWin(gained);
+      FX.speedLines('#ffd75e');
+      FX.confetti(wc.x, wc.y, { n: 20 });
+    }
 
     grabPrize(winner, gained);
     later(() => {                                   // lands as the hand pulls it home
@@ -607,8 +623,10 @@ function paintResolution(players, winner, gained, potAfter) {
     pc.classList.remove('hidden', 'bump');
     void pc.offsetWidth;
     pc.classList.add('bump');
-    const pr = $('prizePile').getBoundingClientRect();
-    sparkBurst(pr.left + pr.width / 2, pr.top + pr.height / 2, 10, '#ff4d6d');
+    const pr = FX.centreOf($('prizePile'));
+    sparkBurst(pr.x, pr.y, 10, '#ff4d6d');
+    FX.ring(pr.x, pr.y, { size: 200, color: '#ff4d6d', life: 480, thick: 7 });
+    FX.floatText(pr.x, pr.y - 50, 'x' + potAfter, 'bad');
     showEvent('NOBODY WINS — PRIZE CARRIES OVER');
     SFX.nobody();
     SFX.potGrow(potAfter);
@@ -834,7 +852,7 @@ $('playAgainBtn').onclick = () => { SFX.click(); joinQueue(); };
 $('resultMenuBtn').onclick = () => { SFX.click(); show('menuScreen'); renderMenu(); };
 $('mmCancel').onclick = () => { SFX.click(); leaveQueueUi(); };
 $('quitBtn').onclick = quitMatch;
-$('panelClose').onclick = () => { SFX.click(); closePanel(); };
+$('panelClose').onclick = () => { SFX.back(); closePanel(); };
 $('panelWrap').onclick = e => { if (e.target === $('panelWrap')) closePanel(); };
 
 $('navCards').onclick = () => { SFX.click(); openPanel('Cards', panelCards); };
@@ -862,6 +880,12 @@ function setAuthMode(mode) {
   $('tabSignup').classList.toggle('active', mode === 'signup');
   $('authPass2').classList.toggle('hidden', mode === 'login');
   $('authSubmit').textContent = mode === 'login' ? 'LOG IN' : 'CREATE ACCOUNT';
+  // The password rules belong on the sign-up tab only. Showing them while logging
+  // in reads like they apply to the account you already have, and they don't.
+  $('authNote').innerHTML = mode === 'login'
+    ? 'Your profile and friends follow this account on any device.'
+    : 'Your profile and friends follow this account on any device.<br />' +
+      "At least 8 characters, and don't reuse a password from anywhere else.";
   authError('');
 }
 
