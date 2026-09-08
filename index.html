@@ -75,6 +75,7 @@
     <button class="nav-btn" id="navShop"><span>🛒</span>Shop</button>
     <button class="nav-btn" id="navProfile"><span>👤</span>Profile</button>
     <button class="nav-btn" id="navArenas"><span>🏟️</span>Arenas</button>
+    <button class="nav-btn" id="navBoard"><span>📊</span>Ranks</button>
     <button class="nav-btn" id="navFriends"><span>👥</span>Friends<div id="friendDot" class="dot hidden"></div></button>
     <button class="nav-btn" id="navChallenges"><span>🎯</span>Daily<div id="challengeDot" class="dot hidden"></div></button>
   </div>
@@ -140,6 +141,50 @@
   </div>
 </div>
 
+<!-- ============ TUTORIAL ============ -->
+<!-- Its own screen rather than a layer over a real match: matches are run by the
+     server, and a lesson needs cards that come out in a chosen order. -->
+<div id="tutorialScreen" class="screen hidden">
+  <div id="tutBg" class="scene-host"></div>
+  <div id="tutFx"></div>
+
+  <div id="tutTop">
+    <div id="tutStep" class="tut-step">1 / 7</div>
+    <button id="tutSkip" class="tut-skip">Skip</button>
+  </div>
+
+  <div id="tutTable" class="tbl-wooden">
+    <div class="seat" data-seat="2" id="tutSeat2"></div>
+    <div class="seat" data-seat="1" id="tutSeat1"></div>
+    <div id="tutCenter">
+      <div id="tutPrize">
+        <div class="prize-card"><span>PRIZE</span></div>
+        <div id="tutPrizeCount" class="prize-count hidden">x2</div>
+      </div>
+      <div id="tutCenterText"></div>
+    </div>
+    <div class="seat" data-seat="3" id="tutSeat3"></div>
+    <div class="seat" data-seat="0" id="tutSeat0"></div>
+  </div>
+
+  <div id="tutHandArea">
+    <div class="hand-label" id="tutHandLabel"></div>
+    <div id="tutHandCards"></div>
+    <button id="tutPeek" class="peek-btn hidden">
+      <span class="peek-eye">👀</span> PEEK
+      <span id="tutPeekCount" class="peek-count">3</span>
+    </button>
+  </div>
+
+  <div id="tutCoach">
+    <div class="tut-face" id="tutFace">🐉</div>
+    <div class="tut-bubble">
+      <div id="tutText"></div>
+      <button id="tutNext" class="tut-next">NEXT</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ RESULTS ============ -->
 <div id="resultScreen" class="screen hidden">
   <div id="resultBg" class="scene-host"></div>
@@ -177,6 +222,7 @@
 <script src="fx.js"></script>
 <script src="save.js"></script>
 <script src="game.js"></script>
+<script src="tutorial.js"></script>
 <script src="net.js"></script>
 </body>
 </html>

@@ -22,6 +22,7 @@ const DEFAULT_SAVE = {
   bestStreak: 0,
   muted: false,
   mode: 'party',
+  tutorialSeen: false,
   unlocked: {
     cardBacks: ['classic'],
     tables: ['wooden'],

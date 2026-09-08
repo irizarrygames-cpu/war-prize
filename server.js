@@ -202,6 +202,41 @@ async function flushDB() {
 // user record: { name, hash, salt, iterations, created, save, friends[], incoming[], outgoing[] }
 function getUser(id) { return DB.users[id]; }
 
+/* ---------------- leaderboard ---------------- */
+
+const LEADERBOARD_SIZE = 100;
+const LEADERBOARD_CACHE_MS = 15000;
+let boardCache = null;
+
+// Ranking everyone on every request is wasteful when a hundred people are looking
+// at the same list, so the sorted table is rebuilt at most every few seconds. Your
+// own rank is read out of it rather than recomputed.
+function rankedUsers() {
+  if (boardCache && Date.now() - boardCache.at < LEADERBOARD_CACHE_MS) return boardCache.rows;
+  const rows = Object.entries(DB.users)
+    .map(([id, u]) => ({
+      id,
+      name: u.name || id.toUpperCase(),
+      avatar: (u.save && u.save.avatar) || '🎮',
+      trophies: Math.max(0, (u.save && u.save.trophies) | 0),
+      level: Math.max(1, (u.save && u.save.level) | 0),
+    }))
+    // A tie is broken by name so the order doesn't shuffle between refreshes.
+    .sort((a, b) => b.trophies - a.trophies || a.name.localeCompare(b.name));
+  boardCache = { at: Date.now(), rows };
+  return rows;
+}
+
+function leaderboard(meId) {
+  const rows = rankedUsers();
+  const myIndex = rows.findIndex(r => r.id === meId);
+  return {
+    top: rows.slice(0, LEADERBOARD_SIZE).map(({ id, ...rest }) => rest),
+    players: rows.length,
+    me: myIndex < 0 ? null : { rank: myIndex + 1, trophies: rows[myIndex].trophies },
+  };
+}
+
 function ensureLists(u) {
   u.friends = u.friends || [];
   u.incoming = u.incoming || [];
@@ -964,6 +999,11 @@ const server = http.createServer(async (req, res) => {
     saveDB();
     pushFriends(me); if (ou) pushFriends(other);
     return sendJSON(res, 200, { ok: true });
+  }
+
+  // ---- leaderboard ----
+  if (route === '/api/leaderboard') {
+    return sendJSON(res, 200, { ok: true, ...leaderboard(me) });
   }
 
   // ---- invites ----

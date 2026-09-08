@@ -27,10 +27,10 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 
 /* ---------------- screens ---------------- */
 
+const SCREENS = ['authScreen', 'menuScreen', 'mmScreen', 'matchScreen', 'resultScreen', 'tutorialScreen'];
+
 function show(screenId) {
-  ['authScreen', 'menuScreen', 'mmScreen', 'matchScreen', 'resultScreen'].forEach(id => {
-    $(id).classList.toggle('hidden', id !== screenId);
-  });
+  SCREENS.forEach(id => { $(id).classList.toggle('hidden', id !== screenId); });
 }
 
 function toast(msg) {
@@ -210,6 +210,59 @@ function panelShop() {
   return wrap;
 }
 
+// Filled by the server the first time the panel opens, then redrawn in place, so
+// the list doesn't sit empty while the request is in flight.
+let BOARD = null;
+
+function panelLeaderboard() {
+  const wrap = el('div');
+
+  if (!BOARD) {
+    wrap.appendChild(el('div', 'board-empty', 'Loading…'));
+    api('leaderboard').then(r => {
+      if (!r.ok) { toast(r.msg || 'Could not load the leaderboard'); return; }
+      BOARD = r;
+      refreshPanel();
+    });
+    return wrap;
+  }
+
+  const mine = BOARD.me;
+  const head = el('div', 'board-me');
+  head.appendChild(el('div', 'board-me-rank', mine ? '#' + mine.rank.toLocaleString() : '—'));
+  const meta = el('div');
+  meta.appendChild(el('div', 'board-me-name', SAVE.name));
+  meta.appendChild(el('div', 'board-me-sub',
+    mine ? `${mine.trophies.toLocaleString()} 🏆 · out of ${BOARD.players.toLocaleString()} players`
+         : 'Play a match to get on the board'));
+  head.appendChild(meta);
+  wrap.appendChild(head);
+
+  wrap.appendChild(el('div', 'panel-sub', 'Top ' + Math.min(100, BOARD.top.length)));
+
+  const list = el('div', 'board-list');
+  BOARD.top.forEach((p, i) => {
+    const isMe = p.name === SAVE.name;
+    const row = el('div', 'board-row' + (isMe ? ' you' : '') + (i < 3 ? ' top' + (i + 1) : ''));
+    row.appendChild(el('span', 'board-rank', ['🥇', '🥈', '🥉'][i] || '#' + (i + 1)));
+    row.appendChild(el('span', 'board-av', p.avatar));
+    row.appendChild(el('span', 'board-name', p.name));
+    row.appendChild(el('span', 'board-lvl', 'Lv' + p.level));
+    row.appendChild(el('span', 'board-tr', p.trophies.toLocaleString() + ' 🏆'));
+    list.appendChild(row);
+  });
+  if (!BOARD.top.length) {
+    list.appendChild(el('div', 'board-empty', 'Nobody has played a ranked match yet. Be the first.'));
+  }
+  wrap.appendChild(list);
+  return wrap;
+}
+
+function openLeaderboard() {
+  BOARD = null;                        // always show live standings, never a stale copy
+  openPanel('Leaderboard', panelLeaderboard);
+}
+
 function panelProfile() {
   const ar = arenaFor(SAVE.trophies);
   const wrap = el('div', 'profile');
@@ -251,6 +304,11 @@ function panelProfile() {
     list.appendChild(row);
   }
   wrap.appendChild(list);
+
+  // The tutorial only ever runs itself once; this is the way back to it.
+  const howto = el('button', 'ghost-btn', '❓ How to Play');
+  howto.onclick = () => { SFX.click(); closePanel(); TUTORIAL.start(); };
+  wrap.appendChild(howto);
 
   const mute = el('button', 'ghost-btn', SFX.isMuted() ? '🔇 Sound Off' : '🔊 Sound On');
   mute.onclick = () => {
@@ -859,6 +917,9 @@ $('navCards').onclick = () => { SFX.click(); openPanel('Cards', panelCards); };
 $('navShop').onclick = () => { SFX.click(); openPanel('Shop', panelShop); };
 $('navProfile').onclick = () => { SFX.click(); openPanel('Profile', panelProfile); };
 $('navArenas').onclick = () => { SFX.click(); openPanel('Arenas', panelArenas); };
+$('navBoard').onclick = () => { SFX.click(); openLeaderboard(); };
+// Tapping your own trophy count going to the standings is the thing people try.
+$('menuTrophies').parentElement.onclick = () => { SFX.click(); openLeaderboard(); };
 $('navChallenges').onclick = () => { SFX.click(); openPanel('Daily Challenges', panelChallenges); };
 $('navFriends').onclick = () => { SFX.click(); api('friends').then(r => { if (r.ok) FRIENDS = r; refreshPanel(); }); openPanel('Friends', panelFriends); };
 
@@ -900,6 +961,8 @@ function enterGame() {
   SFX.setMuted(!!SAVE.muted);
   renderMenu();
   show('menuScreen');
+  // New account: teach the rules before they lose a match wondering what happened.
+  if (typeof TUTORIAL !== 'undefined') TUTORIAL.maybeStart();
 }
 
 $('tabLogin').onclick = () => { SFX.click(); setAuthMode('login'); };

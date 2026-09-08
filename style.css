@@ -394,15 +394,17 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: clamp(6px, 1.4vw, 10px);
   margin: calc(var(--sp) * 1.4) 0 var(--sp);
   width: 100%;
   max-width: 640px;
   padding: 0 10px;
 }
+/* Four across on a phone: seven buttons then fall as 4 + 3, which sits better than
+   3 + 3 + 1 with a lone button on its own row. */
 @media (max-width: 620px) {
-  .menu-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 420px; }
+  .menu-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 440px; }
 }
 
 .nav-btn {
@@ -705,6 +707,224 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   .sb-score { font-size: 13px; }
 }
 
+/* ================= tutorial ================= */
+
+#tutorialScreen { justify-content: space-between; }
+#tutFx { position: absolute; inset: 0; z-index: 50; pointer-events: none; overflow: hidden; }
+
+#tutTop {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+}
+.tut-step {
+  background: var(--panel);
+  border: 3px solid var(--outline);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 1.4px;
+  box-shadow: 0 4px 0 var(--outline);
+}
+.tut-skip {
+  background: var(--panel);
+  border: 3px solid var(--outline);
+  color: var(--dim);
+  border-radius: 999px;
+  padding: 5px 16px;
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 1.2px;
+  cursor: pointer;
+  box-shadow: 0 4px 0 var(--outline);
+  font-family: inherit;
+}
+.tut-skip:hover { color: var(--txt); }
+
+#tutCenter {
+  grid-area: center;
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+#tutPrize { position: relative; }
+#tutCenterText {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+#tutHandArea {
+  position: relative;
+  z-index: 3;
+  flex: none;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(3px, 0.8vh, 6px);
+  padding: 2px 0 clamp(4px, 1.4vh, 10px);
+}
+#tutHandCards { display: flex; gap: 22px; }
+
+/* cards dealt into your hand */
+.tut-deal { animation: tutDeal 0.42s cubic-bezier(0.2, 1.6, 0.4, 1) backwards; }
+@keyframes tutDeal {
+  0%   { transform: translateY(60px) scale(0.7) rotate(-8deg); opacity: 0; }
+  100% { transform: translateY(0) scale(1) rotate(0); opacity: 1; }
+}
+
+/* the coach */
+#tutCoach {
+  position: relative;
+  z-index: 7;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  width: 100%;
+  max-width: 620px;
+  padding: 0 12px 12px;
+  transition: opacity 0.25s, transform 0.25s;
+}
+#tutCoach.tut-hidden { opacity: 0; transform: translateY(20px); pointer-events: none; }
+
+.tut-face {
+  flex: none;
+  width: 54px; height: 54px;
+  display: grid; place-items: center;
+  font-size: 30px;
+  background: var(--gold);
+  border: 4px solid var(--outline);
+  border-radius: 16px;
+  box-shadow: 0 5px 0 var(--outline);
+  animation: tutBob 2.4s ease-in-out infinite alternate;
+}
+@keyframes tutBob { from { transform: translateY(0); } to { transform: translateY(-5px); } }
+
+.tut-bubble {
+  flex: 1;
+  position: relative;
+  background: var(--panel);
+  border: 4px solid var(--outline);
+  border-radius: 16px;
+  padding: 12px 14px;
+  box-shadow: 0 6px 0 var(--outline);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+}
+#tutText {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: 0.3px;
+  min-height: 2.7em;
+}
+.tut-next {
+  flex: none;
+  background: var(--gold);
+  color: #3a2400;
+  border: 3px solid var(--outline);
+  border-radius: 12px;
+  padding: 9px 16px;
+  font-family: inherit;
+  font-weight: 900;
+  font-size: 13px;
+  letter-spacing: 1.4px;
+  cursor: pointer;
+  box-shadow: 0 5px 0 var(--gold-dk), 0 5px 0 3px var(--outline);
+  transition: transform 0.06s, box-shadow 0.06s;
+}
+.tut-next:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--gold-dk), 0 1px 0 3px var(--outline); }
+
+/* Everything drops back except the thing being explained. */
+#tutorialScreen.tut-dim #tutTable,
+#tutorialScreen.tut-dim #tutHandArea > *,
+#tutorialScreen.tut-dim #tutTop { opacity: 0.32; transition: opacity 0.25s; }
+#tutorialScreen .tut-lit,
+#tutorialScreen.tut-dim .tut-lit {
+  opacity: 1 !important;
+  position: relative;
+  z-index: 8;
+}
+.tut-lit { animation: tutLit 1.4s ease-in-out infinite alternate; }
+@keyframes tutLit { from { transform: scale(1); } to { transform: scale(1.06); } }
+
+/* "tap this" nudge */
+.tut-poke { animation: tutPoke 1s ease-in-out infinite; cursor: pointer; }
+@keyframes tutPoke {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+.tut-poke .card-face { box-shadow: 0 0 0 4px var(--gold), 0 5px 0 4px var(--outline); }
+
+@media (max-width: 620px) {
+  .tut-bubble { padding: 10px; gap: 8px; }
+  #tutText { font-size: 12.5px; }
+  .tut-next { padding: 8px 12px; font-size: 12px; }
+  .tut-face { width: 44px; height: 44px; font-size: 24px; }
+  #tutHandCards { gap: 16px; }
+}
+
+/* ================= leaderboard ================= */
+
+.board-me {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--gold);
+  color: #3a2400;
+  border: 4px solid var(--outline);
+  border-radius: 16px;
+  padding: 12px 16px;
+  box-shadow: 0 5px 0 var(--outline);
+}
+.board-me-rank { font-size: 30px; font-weight: 900; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+.board-me-name { font-size: 18px; font-weight: 900; letter-spacing: 1px; }
+.board-me-sub  { font-size: 11px; font-weight: 800; color: #6b4a00; letter-spacing: 0.4px; }
+
+.board-list { display: flex; flex-direction: column; gap: 6px; }
+
+.board-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel-2);
+  border: 3px solid var(--outline);
+  border-radius: 12px;
+  padding: 7px 11px;
+  font-weight: 800;
+}
+.board-row.you { background: var(--gold); color: #3a2400; }
+.board-row.top1 { background: #6b5300; }
+.board-row.top2 { background: #4a4f5e; }
+.board-row.top3 { background: #5e3d22; }
+.board-row.top1.you, .board-row.top2.you, .board-row.top3.you { background: var(--gold); }
+
+.board-rank { min-width: 34px; font-size: 14px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.board-av { font-size: 19px; }
+.board-name { flex: 1; font-size: 13px; letter-spacing: 0.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-lvl { font-size: 10px; font-weight: 900; color: var(--dim); }
+.board-row.you .board-lvl { color: #6b4a00; }
+.board-tr { font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums; }
+
+.board-empty {
+  padding: 22px 12px;
+  text-align: center;
+  color: var(--dim);
+  font-weight: 800;
+  font-size: 13px;
+}
+
 /* ================= effects =================
    All of these are solid shapes that move and scale. Nothing here uses a blur, a
    glow or a gradient -- the punch comes from how fast they grow and fade. */
@@ -863,7 +1083,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
 
 /* --- table (flat, straight-on) --- */
 
-#table {
+#table, #tutTable {
   position: relative;
   z-index: 2;
   flex: 1 1 auto;
@@ -891,7 +1111,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
 /* Phones: start the table below the HUD so the timer and scores never sit on the
    top player, and give the side seats more of the width than the prize column. */
 @media (max-width: 620px) {
-  #table {
+  #table, #tutTable {
     margin-top: 64px;
     width: calc(100% - 16px);
     grid-template-columns: 1fr minmax(58px, 0.72fr) 1fr;
@@ -923,11 +1143,13 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   max-width: 100%;
   transition: opacity 0.25s;
 }
-/* Each seat's played card sits on the side nearest the middle of the table. */
-#seat0 { grid-area: seat0; }
-#seat1 { grid-area: seat1; }
-#seat2 { grid-area: seat2; flex-direction: column-reverse; }
-#seat3 { grid-area: seat3; }
+/* Each seat's played card sits on the side nearest the middle of the table.
+   Keyed off data-seat rather than the id so the tutorial's table can reuse all of
+   this without duplicating a stylesheet's worth of rules. */
+.seat[data-seat="0"] { grid-area: seat0; }
+.seat[data-seat="1"] { grid-area: seat1; }
+.seat[data-seat="2"] { grid-area: seat2; flex-direction: column-reverse; }
+.seat[data-seat="3"] { grid-area: seat3; }
 
 .seat.out { opacity: 0.25; }
 .seat.ready .seat-card-slot .card { transform: translateY(-8px); }
@@ -1017,7 +1239,10 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   transform: rotate(-38deg);
 }
 
-.card.winner { transform: scale(1.16); z-index: 5; }
+/* Grows away from the name plate rather than out of its middle -- scaling from the
+   centre pushed the winning card down over the player's own name and score. */
+.card.winner { transform: scale(1.16); z-index: 5; transform-origin: bottom center; }
+.seat[data-seat="2"] .card.winner { transform-origin: top center; }
 .card.winner .card-front {
   background: #fff4cd;
   box-shadow: 0 0 0 5px var(--gold), 0 5px 0 5px var(--outline);
