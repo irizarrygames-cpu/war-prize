@@ -263,6 +263,63 @@ function openLeaderboard() {
   openPanel('Leaderboard', panelLeaderboard);
 }
 
+// Owner-only. Hidden entirely unless the server says this account owns the game --
+// and the server checks again on every request, so hiding it is only tidiness.
+let ADMIN_LIST = null;
+
+function panelAdmin() {
+  const wrap = el('div');
+  if (!ADMIN_LIST) {
+    wrap.appendChild(el('div', 'board-empty', 'Loading…'));
+    api('admin/users').then(r => {
+      if (!r.ok) { toast(r.msg || 'Not allowed'); closePanel(); return; }
+      ADMIN_LIST = r.users;
+      refreshPanel();
+    });
+    return wrap;
+  }
+
+  wrap.appendChild(el('div', 'panel-sub', ADMIN_LIST.length + ' accounts'));
+  const search = el('input', 'auth-input');
+  search.placeholder = 'Search a name…';
+  wrap.appendChild(search);
+
+  const list = el('div', 'board-list');
+  wrap.appendChild(list);
+
+  const draw = () => {
+    const q = search.value.trim().toLowerCase();
+    list.innerHTML = '';
+    const shown = ADMIN_LIST.filter(u => !q || u.name.toLowerCase().includes(q)).slice(0, 60);
+    if (!shown.length) { list.appendChild(el('div', 'board-empty', 'Nobody matches that')); return; }
+    for (const u of shown) {
+      const row = el('div', 'board-row' + (u.id === CURRENT_USER ? ' you' : ''));
+      row.appendChild(el('span', 'board-name', u.name));
+      row.appendChild(el('span', 'board-lvl', u.online ? 'online' : ''));
+      row.appendChild(el('span', 'board-tr', u.trophies.toLocaleString() + ' 🏆'));
+      if (u.id !== CURRENT_USER) {
+        const del = el('button', 'admin-del', 'Delete');
+        del.onclick = async () => {
+          if (!confirm('Delete ' + u.name + ' for good? This cannot be undone.')) return;
+          del.disabled = true;
+          const r = await api('admin/delete', { username: u.id });
+          if (!r.ok) { SFX.error(); toast(r.msg || 'Could not delete'); del.disabled = false; return; }
+          SFX.unlockChime();
+          toast(u.name + ' deleted');
+          ADMIN_LIST = ADMIN_LIST.filter(x => x.id !== u.id);
+          BOARD = null;
+          draw();
+        };
+        row.appendChild(del);
+      }
+      list.appendChild(row);
+    }
+  };
+  search.oninput = draw;
+  draw();
+  return wrap;
+}
+
 function panelProfile() {
   const ar = arenaFor(SAVE.trophies);
   const wrap = el('div', 'profile');
@@ -304,6 +361,12 @@ function panelProfile() {
     list.appendChild(row);
   }
   wrap.appendChild(list);
+
+  if (IS_ADMIN) {
+    const admin = el('button', 'ghost-btn', '🛡️ Manage Accounts');
+    admin.onclick = () => { SFX.click(); ADMIN_LIST = null; openPanel('Manage Accounts', panelAdmin); };
+    wrap.appendChild(admin);
+  }
 
   // The tutorial only ever runs itself once; this is the way back to it.
   const howto = el('button', 'ghost-btn', '❓ How to Play');

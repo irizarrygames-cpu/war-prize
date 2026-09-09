@@ -6,6 +6,17 @@
 <meta http-equiv="Cache-Control" content="no-store" />
 <title>War Prize</title>
 <link rel="stylesheet" href="style.css" />
+
+<!-- Add to Home Screen. The theme colour paints the phone's status bar, so the game
+     runs edge to edge instead of inside a browser. -->
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#1b2333" />
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+<link rel="apple-touch-icon" href="icon-180.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="War Prize" />
+<meta name="mobile-web-app-capable" content="yes" />
 </head>
 <body>
 
@@ -224,5 +235,12 @@
 <script src="game.js"></script>
 <script src="tutorial.js"></script>
 <script src="net.js"></script>
+<script>
+  // Registering a worker is what makes the game installable. It caches nothing --
+  // see sw.js for why.
+  if ('serviceWorker' in navigator) {
+    addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+</script>
 </body>
 </html>

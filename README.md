@@ -57,6 +57,29 @@ one up: make a project, copy the connection string it shows you, and paste it in
 the host as an environment variable called `DATABASE_URL`. The table is created on
 first boot; there is nothing to run by hand.
 
+### Moderating it
+
+Set **`ADMIN_USER`** to your own username and a "Manage Accounts" button appears in
+your Profile: search every account, see who is online, and delete one for good. The
+server checks the name on every request, so hiding the button is only tidiness.
+Leave it unset and nobody is an admin.
+
+Deleting drops the player from any live match, clears them out of everyone else's
+friends list, invalidates their sessions and frees the username. You cannot delete
+your own account.
+
+Usernames are screened at sign-up by `moderation.js` — never at login, so nobody
+who signed up before the filter gets locked out. It folds the usual letter-swapping
+dodges back to plain letters (`sh1t`, `fvck`, `phuck`, `a55hole`) and matches
+severe terms anywhere but ordinary swearing only as a whole word, which is what
+keeps Scunthorpe, Dickinson, Hancock and "analysis" playable.
+
+### Icons
+
+`node tools/make-icons.js` redraws the home-screen icons from shapes and writes the
+PNGs with Node's own zlib. No image editor, no dependency. Run it if you change the
+icon design.
+
 If `DATABASE_URL` is set but unreachable, **the server refuses to start** rather than
 coming up with an empty account list — otherwise it would tell everyone their
 account doesn't exist and then overwrite the real rows on the first save.

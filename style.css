@@ -2083,3 +2083,21 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   .card { width: 36px; height: 52px; }
   .hand-card .card { width: 50px; height: 72px; }
 }
+
+/* owner-only account tools */
+.admin-del {
+  flex: none;
+  background: var(--bad);
+  color: #fff;
+  border: 3px solid var(--outline);
+  border-radius: 10px;
+  padding: 5px 11px;
+  font-family: inherit;
+  font-weight: 900;
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  cursor: pointer;
+  box-shadow: 0 3px 0 var(--outline);
+}
+.admin-del:hover { background: var(--bad-dk); }
+.admin-del:disabled { opacity: 0.5; cursor: default; }

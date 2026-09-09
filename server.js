@@ -10,6 +10,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { screenUsername } = require('./moderation');
 
 const PORT = Number(process.argv[2] || process.env.PORT || 8421);
 const ROOT = __dirname;
@@ -104,6 +105,11 @@ let DB = { users: {} };
 
 const DATABASE_URL = process.env.DATABASE_URL || '';
 
+// Set ADMIN_USER to your own username to get the moderation tools in-game. Left
+// unset, nobody is an admin and the endpoints below simply refuse everyone.
+const ADMIN_USER = String(process.env.ADMIN_USER || '').trim().toLowerCase();
+const isAdmin = id => !!ADMIN_USER && id === ADMIN_USER;
+
 function makeFileStore() {
   return {
     kind: 'file',
@@ -120,6 +126,7 @@ function makeFileStore() {
       await fs.promises.writeFile(DATA_FILE + '.tmp', JSON.stringify({ users }));
       await fs.promises.rename(DATA_FILE + '.tmp', DATA_FILE);
     },
+    async remove() { /* the whole map is rewritten, so it is already gone */ },
   };
 }
 
@@ -162,6 +169,7 @@ function makePostgresStore(url) {
                   ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`;
       }
     },
+    async remove(id) { await sql`DELETE FROM users WHERE id = ${id}`; },
   };
 }
 
@@ -781,6 +789,7 @@ const MIME = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
@@ -860,6 +869,10 @@ const server = http.createServer(async (req, res) => {
 
     if (route === '/api/auth/signup') {
       if (getUser(id)) return sendJSON(res, 200, { ok: false, msg: 'That username is taken' });
+      // Only on the way in. Screening at login would lock out anyone who signed up
+      // before the filter existed, which is the same mistake the password rules made.
+      const rude = screenUsername(body.username);
+      if (rude) return sendJSON(res, 200, { ok: false, msg: rude });
       const salt = crypto.randomBytes(16).toString('base64');
       const hash = await hashPassword(body.password, salt, PBKDF2_ITERATIONS);
       DB.users[id] = {
@@ -945,8 +958,54 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (route === '/api/admin/users') {
+    if (!isAdmin(me)) return sendJSON(res, 403, { ok: false, msg: 'Not allowed' });
+    const rows = Object.entries(DB.users).map(([id, u]) => ({
+      id,
+      name: u.name || id.toUpperCase(),
+      trophies: Math.max(0, (u.save && u.save.trophies) | 0),
+      created: u.created || 0,
+      online: isOnline(id),
+    })).sort((a, b) => b.created - a.created);
+    return sendJSON(res, 200, { ok: true, users: rows });
+  }
+
+  // Deleting an account is not undoable, so it is deliberately narrow: only the
+  // owner, never the owner's own account, and the player is dropped from any live
+  // match and everyone else's friends list on the way out.
+  if (route === '/api/admin/delete') {
+    if (!isAdmin(me)) return sendJSON(res, 403, { ok: false, msg: 'Not allowed' });
+    const target = normalizeId(body.username);
+    if (!target || !getUser(target)) return sendJSON(res, 200, { ok: false, msg: 'No such account' });
+    if (target === me) return sendJSON(res, 200, { ok: false, msg: "You can't delete your own account" });
+
+    const m = matchOf(target);
+    if (m && !m.over) finishMatch(m, target);
+    leaveQueue(target);
+
+    for (const [id, u] of Object.entries(DB.users)) {
+      if (id === target) continue;
+      ensureLists(u);
+      u.friends = u.friends.filter(x => x !== target);
+      u.incoming = u.incoming.filter(x => x !== target);
+      u.outgoing = u.outgoing.filter(x => x !== target);
+    }
+    for (const [tok, id] of tokens) if (id === target) tokens.delete(tok);
+    pending.delete(target);
+    lastSeen.delete(target);
+    const w = waiters.get(target);
+    if (w) { clearTimeout(w.timer); waiters.delete(target); try { sendJSON(w.res, 200, { ok: true, events: [] }); } catch (e) {} }
+
+    delete DB.users[target];
+    persisted.delete(target);
+    boardCache = null;
+    try { await store.remove(target); } catch (e) { console.error('delete failed:', e.message); }
+    saveDB();
+    return sendJSON(res, 200, { ok: true, deleted: target });
+  }
+
   if (route === '/api/me') {
-    return sendJSON(res, 200, { ok: true, name: meUser.name, save: meUser.save });
+    return sendJSON(res, 200, { ok: true, name: meUser.name, save: meUser.save, admin: isAdmin(me) });
   }
 
   if (route === '/api/save') {

@@ -6,6 +6,7 @@ const TOKEN_KEY = 'warprize.token.v2';
 let SAVE = null;
 let CURRENT_USER = null;
 let AUTH_TOKEN = null;
+let IS_ADMIN = false;   // set by the server, never trusted from here
 
 const DEFAULT_SAVE = {
   name: 'PLAYER',
@@ -132,6 +133,8 @@ async function logIn(username, password) {
   if (!res.ok) return res;
   storeToken(res.token);
   adoptSession(String(username).trim().toLowerCase(), res.name, res.save);
+  const me = await api('me');            // tells us whether this account owns the game
+  IS_ADMIN = !!(me && me.ok && me.admin);
   return { ok: true };
 }
 
@@ -142,6 +145,7 @@ async function resumeSession() {
   AUTH_TOKEN = stored;
   const res = await api('me');
   if (!res.ok) { storeToken(null); AUTH_TOKEN = null; return false; }
+  IS_ADMIN = !!res.admin;
   adoptSession(res.name.toLowerCase(), res.name, res.save);
   return true;
 }
@@ -152,6 +156,7 @@ async function logOut() {
   AUTH_TOKEN = null;
   CURRENT_USER = null;
   SAVE = null;
+  IS_ADMIN = false;
 }
 
 /* ---------------- challenges ---------------- */
