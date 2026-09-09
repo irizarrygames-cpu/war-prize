@@ -279,7 +279,13 @@ function panelAdmin() {
     return wrap;
   }
 
-  wrap.appendChild(el('div', 'panel-sub', ADMIN_LIST.length + ' accounts'));
+  const flagged = ADMIN_LIST.filter(u => u.flagged).length;
+  wrap.appendChild(el('div', 'panel-sub', ADMIN_LIST.length + ' accounts' +
+    (flagged ? ' · ' + flagged + ' flagged' : '')));
+  if (flagged) {
+    wrap.appendChild(el('div', 'board-empty',
+      'Flagged names signed up before the filter existed. Check them and delete if needed.'));
+  }
   const search = el('input', 'auth-input');
   search.placeholder = 'Search a name…';
   wrap.appendChild(search);
@@ -294,6 +300,7 @@ function panelAdmin() {
     if (!shown.length) { list.appendChild(el('div', 'board-empty', 'Nobody matches that')); return; }
     for (const u of shown) {
       const row = el('div', 'board-row' + (u.id === CURRENT_USER ? ' you' : ''));
+      if (u.flagged) row.appendChild(el('span', 'board-flag', '⚠️'));
       row.appendChild(el('span', 'board-name', u.name));
       row.appendChild(el('span', 'board-lvl', u.online ? 'online' : ''));
       row.appendChild(el('span', 'board-tr', u.trophies.toLocaleString() + ' 🏆'));

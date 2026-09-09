@@ -966,7 +966,11 @@ const server = http.createServer(async (req, res) => {
       trophies: Math.max(0, (u.save && u.save.trophies) | 0),
       created: u.created || 0,
       online: isOnline(id),
-    })).sort((a, b) => b.created - a.created);
+      // Screening only runs at sign-up, so anyone who got in before the filter
+      // existed is still here. Flag them rather than deleting anything
+      // automatically -- a false positive would wipe a real player's progress.
+      flagged: !!screenUsername(id),
+    })).sort((a, b) => (b.flagged - a.flagged) || (b.created - a.created));
     return sendJSON(res, 200, { ok: true, users: rows });
   }
 

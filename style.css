@@ -2101,3 +2101,4 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
 }
 .admin-del:hover { background: var(--bad-dk); }
 .admin-del:disabled { opacity: 0.5; cursor: default; }
+.board-flag { font-size: 14px; flex: none; }
