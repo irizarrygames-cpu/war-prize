@@ -102,7 +102,17 @@ function wordsIn(raw) {
   return String(raw || '').toLowerCase().split(/[^a-z0-9]+/).map(normalize).filter(Boolean);
 }
 
+// Listing every insult somebody can build is whack-a-mole -- 'fuckwit' walked past a
+// suffix list containing 'face', 'head' and 'boy'. For terms that begin no innocent
+// English word, anything STARTING with them is out, whatever got stuck on the end.
+// This list is deliberately short: 'shit' would take out shitake, and 'dick' would
+// take out Dickinson, so those stay on the suffix rule.
+// 'slut' and 'whore' are left off: Slutsky and Whorley are real surnames, and the
+// suffix rule still catches the actual insults built from them.
+const STRONG_STARTS = ['fuck', 'bitch', 'wank', 'twat', 'cunt', 'nigg'];
+
 function matchesWordTerm(word, term) {
+  if (STRONG_STARTS.includes(term) && word.startsWith(term)) return true;
   for (const pre of PREFIXES) {
     if (!word.startsWith(pre)) continue;
     const rest = word.slice(pre.length);
