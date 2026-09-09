@@ -13,6 +13,8 @@ const crypto = require('crypto');
 const { screenUsername } = require('./moderation');
 
 const PORT = Number(process.argv[2] || process.env.PORT || 8421);
+// Bumped whenever something worth verifying from outside ships. /api/health reports it.
+const BUILD = 7;
 const ROOT = __dirname;
 const DATA_FILE = path.join(ROOT, 'data.json');
 
@@ -857,6 +859,19 @@ const server = http.createServer(async (req, res) => {
   let body;
   try { body = await readBody(req); }
   catch (e) { return sendJSON(res, 400, { ok: false, msg: 'Bad request' }); }
+
+  // Public, and deliberately side-effect free. Checking whether a deploy has landed
+  // by trying to sign up a test name creates the account when the check fails, which
+  // is how a pile of junk accounts ended up on the live leaderboard.
+  if (route === '/api/health') {
+    return sendJSON(res, 200, {
+      ok: true,
+      build: BUILD,
+      storage: store.kind,
+      moderated: true,
+      admin: !!ADMIN_USER,
+    });
+  }
 
   // ---- auth ----
   if (route === '/api/auth/signup' || route === '/api/auth/login') {
