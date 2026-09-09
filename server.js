@@ -14,7 +14,7 @@ const { screenUsername } = require('./moderation');
 
 const PORT = Number(process.argv[2] || process.env.PORT || 8421);
 // Bumped whenever something worth verifying from outside ships. /api/health reports it.
-const BUILD = 7;
+const BUILD = 8;
 const ROOT = __dirname;
 const DATA_FILE = path.join(ROOT, 'data.json');
 
@@ -883,11 +883,13 @@ const server = http.createServer(async (req, res) => {
     const id = normalizeId(body.username);
 
     if (route === '/api/auth/signup') {
-      if (getUser(id)) return sendJSON(res, 200, { ok: false, msg: 'That username is taken' });
+      // Screened before the taken-check on purpose: a refused name should not also
+      // reveal whether somebody already holds it.
       // Only on the way in. Screening at login would lock out anyone who signed up
       // before the filter existed, which is the same mistake the password rules made.
       const rude = screenUsername(body.username);
       if (rude) return sendJSON(res, 200, { ok: false, msg: rude });
+      if (getUser(id)) return sendJSON(res, 200, { ok: false, msg: 'That username is taken' });
       const salt = crypto.randomBytes(16).toString('base64');
       const hash = await hashPassword(body.password, salt, PBKDF2_ITERATIONS);
       DB.users[id] = {
