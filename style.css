@@ -2102,3 +2102,75 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
 .admin-del:hover { background: var(--bad-dk); }
 .admin-del:disabled { opacity: 0.5; cursor: default; }
 .board-flag { font-size: 14px; flex: none; }
+
+/* ================= confirm box ================= */
+
+#confirmWrap {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(15, 19, 32, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.confirm-box {
+  background: var(--panel);
+  border: 5px solid var(--outline);
+  border-radius: 20px;
+  box-shadow: 0 8px 0 var(--outline);
+  padding: 20px;
+  width: min(92vw, 380px);
+  text-align: center;
+  animation: confirmIn 0.24s cubic-bezier(0.2, 1.7, 0.4, 1);
+}
+@keyframes confirmIn {
+  from { transform: scale(0.8); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+.confirm-title {
+  font-size: 20px; font-weight: 900; letter-spacing: 1px;
+  -webkit-text-stroke: 4px var(--outline);
+  paint-order: stroke fill;
+}
+.confirm-text {
+  margin-top: 10px;
+  font-size: 13px; font-weight: 800; line-height: 1.4;
+  color: var(--dim);
+}
+.confirm-actions {
+  margin-top: 18px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.confirm-actions .ghost-btn { margin: 0; }
+.confirm-yes {
+  background: var(--bad);
+  color: #fff;
+  border: 3px solid var(--outline);
+  border-radius: 12px;
+  padding: 10px 22px;
+  font-family: inherit;
+  font-weight: 900;
+  font-size: 14px;
+  letter-spacing: 1.2px;
+  cursor: pointer;
+  box-shadow: 0 5px 0 var(--bad-dk), 0 5px 0 3px var(--outline);
+  transition: transform 0.06s, box-shadow 0.06s;
+}
+.confirm-yes:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--bad-dk), 0 1px 0 3px var(--outline); }
+
+#askPassWrap {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(15, 19, 32, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+#askPassWrap .auth-input { margin-top: 14px; }
+.danger-btn { color: var(--bad); border-color: var(--bad-dk); }

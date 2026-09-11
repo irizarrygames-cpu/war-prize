@@ -14,7 +14,7 @@ const { screenUsername } = require('./moderation');
 
 const PORT = Number(process.argv[2] || process.env.PORT || 8421);
 // Bumped whenever something worth verifying from outside ships. /api/health reports it.
-const BUILD = 8;
+const BUILD = 9;
 const ROOT = __dirname;
 const DATA_FILE = path.join(ROOT, 'data.json');
 
@@ -248,6 +248,39 @@ function rankedUsers() {
     .sort((a, b) => b.trophies - a.trophies || a.name.localeCompare(b.name));
   boardCache = { at: Date.now(), rows };
   return rows;
+}
+
+// Everything that has to happen when an account goes: out of any live match, out of
+// everyone else's friends list, sessions killed, row dropped. Shared by the player
+// deleting their own account and the owner deleting someone else's, so the two can
+// never drift apart and leave dangling references behind.
+async function removeAccount(target) {
+  const m = matchOf(target);
+  if (m && !m.over) finishMatch(m, target);
+  leaveQueue(target);
+
+  for (const [id, u] of Object.entries(DB.users)) {
+    if (id === target) continue;
+    ensureLists(u);
+    u.friends = u.friends.filter(x => x !== target);
+    u.incoming = u.incoming.filter(x => x !== target);
+    u.outgoing = u.outgoing.filter(x => x !== target);
+  }
+  for (const [tok, id] of tokens) if (id === target) tokens.delete(tok);
+  pending.delete(target);
+  lastSeen.delete(target);
+  const w = waiters.get(target);
+  if (w) {
+    clearTimeout(w.timer);
+    waiters.delete(target);
+    try { sendJSON(w.res, 200, { ok: true, events: [] }); } catch (e) {}
+  }
+
+  delete DB.users[target];
+  persisted.delete(target);
+  boardCache = null;
+  try { await store.remove(target); } catch (e) { console.error('delete failed:', e.message); }
+  saveDB();
 }
 
 function leaderboard(meId) {
@@ -975,6 +1008,17 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (route === '/api/account/delete') {
+    // Your own account, and only with the password, so a borrowed phone or a stray
+    // tap can't wipe somebody's progress.
+    const mine = getUser(me);
+    if (!mine) return sendJSON(res, 200, { ok: false, msg: 'No such account' });
+    const attempt = await hashPassword(String(body.password || ''), mine.salt, mine.iterations);
+    if (attempt !== mine.hash) return sendJSON(res, 200, { ok: false, msg: 'Wrong password' });
+    await removeAccount(me);
+    return sendJSON(res, 200, { ok: true });
+  }
+
   if (route === '/api/admin/users') {
     if (!isAdmin(me)) return sendJSON(res, 403, { ok: false, msg: 'Not allowed' });
     const rows = Object.entries(DB.users).map(([id, u]) => ({
@@ -1000,28 +1044,7 @@ const server = http.createServer(async (req, res) => {
     if (!target || !getUser(target)) return sendJSON(res, 200, { ok: false, msg: 'No such account' });
     if (target === me) return sendJSON(res, 200, { ok: false, msg: "You can't delete your own account" });
 
-    const m = matchOf(target);
-    if (m && !m.over) finishMatch(m, target);
-    leaveQueue(target);
-
-    for (const [id, u] of Object.entries(DB.users)) {
-      if (id === target) continue;
-      ensureLists(u);
-      u.friends = u.friends.filter(x => x !== target);
-      u.incoming = u.incoming.filter(x => x !== target);
-      u.outgoing = u.outgoing.filter(x => x !== target);
-    }
-    for (const [tok, id] of tokens) if (id === target) tokens.delete(tok);
-    pending.delete(target);
-    lastSeen.delete(target);
-    const w = waiters.get(target);
-    if (w) { clearTimeout(w.timer); waiters.delete(target); try { sendJSON(w.res, 200, { ok: true, events: [] }); } catch (e) {} }
-
-    delete DB.users[target];
-    persisted.delete(target);
-    boardCache = null;
-    try { await store.remove(target); } catch (e) { console.error('delete failed:', e.message); }
-    saveDB();
+    await removeAccount(target);
     return sendJSON(res, 200, { ok: true, deleted: target });
   }
 

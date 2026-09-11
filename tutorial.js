@@ -406,8 +406,12 @@ const TUTORIAL = (() => {
     resolveWait(true);
   };
 
-  $('tutSkip').onclick = () => {
-    if (!confirm('Skip the tutorial? You can replay it from your Profile.')) return;
+  $('tutSkip').onclick = async () => {
+    // window.confirm was being suppressed outright in some browsers, so this button
+    // did nothing at all for those players.
+    const sure = await askConfirm('Skip the tutorial?',
+      'You can play it again any time from How to Play in your Profile.', 'Skip');
+    if (!sure) return;
     skipped = true;
     SFX.back();
     finish(false);

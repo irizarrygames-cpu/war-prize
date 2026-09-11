@@ -225,6 +225,31 @@
   </div>
 </div>
 
+<!-- Our own confirm box. The browser's confirm() is silently suppressed in a lot of
+     in-app and mobile browsers, where it just returns false -- which is why Skip in
+     the tutorial appeared to do nothing at all. -->
+<div id="confirmWrap" class="hidden">
+  <div class="confirm-box">
+    <div id="confirmTitle" class="confirm-title">Are you sure?</div>
+    <div id="confirmText" class="confirm-text"></div>
+    <div class="confirm-actions">
+      <button id="confirmNo" class="ghost-btn">Cancel</button>
+      <button id="confirmYes" class="confirm-yes">Yes</button>
+    </div>
+  </div>
+</div>
+
+<div id="askPassWrap" class="hidden">
+  <div class="confirm-box">
+    <div id="askPassTitle" class="confirm-title">Confirm</div>
+    <input id="askPassInput" class="auth-input" type="password" placeholder="Password" autocomplete="off" />
+    <div class="confirm-actions">
+      <button id="askPassNo" class="ghost-btn">Cancel</button>
+      <button id="askPassYes" class="confirm-yes">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="hidden"></div>
 
 <script src="data.js"></script>

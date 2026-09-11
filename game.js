@@ -33,6 +33,46 @@ function show(screenId) {
   SCREENS.forEach(id => { $(id).classList.toggle('hidden', id !== screenId); });
 }
 
+// Replaces window.confirm, which a surprising number of browsers refuse to show --
+// in an in-app browser it returns false without asking, so anything guarded by it
+// looked broken. Resolves true only when the player actually presses the button.
+let confirmResolve = null;
+
+function askConfirm(title, text, okLabel) {
+  $('confirmTitle').textContent = title;
+  $('confirmText').textContent = text || '';
+  $('confirmYes').textContent = okLabel || 'Yes';
+  $('confirmWrap').classList.remove('hidden');
+  SFX.panelOpen();
+  return new Promise(resolve => { confirmResolve = resolve; });
+}
+
+function closeConfirm(answer) {
+  if (!confirmResolve) return;
+  const done = confirmResolve;
+  confirmResolve = null;
+  $('confirmWrap').classList.add('hidden');
+  done(answer);
+}
+
+let passResolve = null;
+
+function askPassword(title) {
+  $('askPassTitle').textContent = title;
+  $('askPassInput').value = '';
+  $('askPassWrap').classList.remove('hidden');
+  setTimeout(() => $('askPassInput').focus(), 50);
+  return new Promise(resolve => { passResolve = resolve; });
+}
+
+function closeAskPass(value) {
+  if (!passResolve) return;
+  const done = passResolve;
+  passResolve = null;
+  $('askPassWrap').classList.add('hidden');
+  done(value);
+}
+
 function toast(msg) {
   const t = $('toast');
   t.textContent = msg;
@@ -307,7 +347,9 @@ function panelAdmin() {
       if (u.id !== CURRENT_USER) {
         const del = el('button', 'admin-del', 'Delete');
         del.onclick = async () => {
-          if (!confirm('Delete ' + u.name + ' for good? This cannot be undone.')) return;
+          const sure = await askConfirm('Delete ' + u.name + '?',
+            'Their account, trophies and progress go for good. This cannot be undone.', 'Delete');
+          if (!sure) return;
           del.disabled = true;
           const r = await api('admin/delete', { username: u.id });
           if (!r.ok) { SFX.error(); toast(r.msg || 'Could not delete'); del.disabled = false; return; }
@@ -325,6 +367,32 @@ function panelAdmin() {
   search.oninput = draw;
   draw();
   return wrap;
+}
+
+async function deleteMyAccount() {
+  SFX.click();
+  const sure = await askConfirm('Delete your account?',
+    'Your trophies, level, coins and everything you have unlocked go for good. This cannot be undone.',
+    'Delete');
+  if (!sure) return;
+
+  const pw = await askPassword('Type your password to confirm');
+  if (!pw) return;
+
+  const res = await api('account/delete', { password: pw });
+  if (!res.ok) { SFX.error(); toast(res.msg || 'Could not delete the account'); return; }
+
+  closePanel();
+  disconnectEvents();
+  storeToken(null);
+  AUTH_TOKEN = null; CURRENT_USER = null; SAVE = null; IS_ADMIN = false;
+  $('authUser').value = '';
+  $('authPass').value = '';
+  setAuthMode('login');
+  document.body.className = 'arena-1';
+  paintScene($('authBg'), 1);
+  show('authScreen');
+  toast('Account deleted');
 }
 
 function panelProfile() {
@@ -388,6 +456,12 @@ function panelProfile() {
     mute.textContent = SFX.isMuted() ? '🔇 Sound Off' : '🔊 Sound On';
   };
   wrap.appendChild(mute);
+
+  // Being able to leave properly matters: without it the only way off the
+  // leaderboard is asking the owner.
+  const wipe = el('button', 'ghost-btn danger-btn', '🗑️ Delete My Account');
+  wipe.onclick = () => deleteMyAccount();
+  wrap.appendChild(wipe);
 
   const out = el('button', 'logout-btn', 'LOG OUT');
   out.onclick = async () => {
@@ -1040,6 +1114,14 @@ function enterGame() {
   // New account: teach the rules before they lose a match wondering what happened.
   if (typeof TUTORIAL !== 'undefined') TUTORIAL.maybeStart();
 }
+
+$('askPassYes').onclick = () => { SFX.click(); closeAskPass($('askPassInput').value); };
+$('askPassNo').onclick = () => { SFX.back(); closeAskPass(null); };
+$('askPassInput').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); closeAskPass($('askPassInput').value); } };
+
+$('confirmYes').onclick = () => { SFX.click(); closeConfirm(true); };
+$('confirmNo').onclick = () => { SFX.back(); closeConfirm(false); };
+$('confirmWrap').onclick = e => { if (e.target === $('confirmWrap')) { SFX.back(); closeConfirm(false); } };
 
 $('tabLogin').onclick = () => { SFX.click(); setAuthMode('login'); };
 $('tabSignup').onclick = () => { SFX.click(); setAuthMode('signup'); };
