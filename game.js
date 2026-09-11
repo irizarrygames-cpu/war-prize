@@ -395,6 +395,52 @@ async function deleteMyAccount() {
   toast('Account deleted');
 }
 
+function panelAwards() {
+  const wrap = el('div');
+  const earned = SAVE.achievements.length;
+
+  const head = el('div', 'board-me');
+  head.appendChild(el('div', 'board-me-rank', earned + '/' + ACHIEVEMENTS.length));
+  const meta = el('div');
+  meta.appendChild(el('div', 'board-me-name', 'AWARDS'));
+  meta.appendChild(el('div', 'board-me-sub',
+    earned === ACHIEVEMENTS.length ? 'Every one of them. Nothing left to win.'
+      : 'Earned once and kept for good'));
+  head.appendChild(meta);
+  wrap.appendChild(head);
+
+  // Earned ones first, so the panel opens on what you have rather than what you don't.
+  const order = [...ACHIEVEMENTS].sort((a, b) =>
+    (SAVE.achievements.includes(b.id) ? 1 : 0) - (SAVE.achievements.includes(a.id) ? 1 : 0));
+
+  const list = el('div', 'board-list');
+  for (const a of order) {
+    const got = SAVE.achievements.includes(a.id);
+    const row = el('div', 'award-row' + (got ? ' got' : ''));
+    row.appendChild(el('span', 'award-medal', got ? '🏅' : '🔒'));
+    const txt = el('div', 'award-text');
+    txt.appendChild(el('div', 'award-name', a.name));
+    txt.appendChild(el('div', 'award-desc', a.desc));
+    row.appendChild(txt);
+    row.appendChild(el('span', 'award-coins', (got ? '' : '+') + a.coins + ' 🪙'));
+    list.appendChild(row);
+  }
+  wrap.appendChild(list);
+  return wrap;
+}
+
+// Earned awards land one after another so each one gets its own moment.
+function showAchievements(list) {
+  list.forEach((a, i) => {
+    setTimeout(() => {
+      toast('🏅 ' + a.name + '  +' + a.coins + ' 🪙');
+      SFX.unlockChime();
+      FX.confetti(innerWidth / 2, innerHeight * 0.32, { n: 18 });
+      FX.ring(innerWidth / 2, innerHeight * 0.32, { size: 220, color: '#ffc93c', life: 520, thick: 7 });
+    }, 2600 + i * 2100);
+  });
+}
+
 function panelProfile() {
   const ar = arenaFor(SAVE.trophies);
   const wrap = el('div', 'profile');
@@ -774,6 +820,7 @@ async function spendPeek(target) {
   if (!res.ok) { SFX.error(); toast(res.msg || 'No peeks left'); renderPeekButton(); return; }
 
   M.peeks = res.peeks;
+  if (!res.free && M.stats) M.stats.peeksUsed++;
   M.seen = M.seen || {};
   M.seen[target === 'self' ? 'self' : target] = res.card;
   if (target === 'self') M.players[0].candidates[1] = res.card;
@@ -1168,6 +1215,7 @@ $('navShop').onclick = () => { SFX.click(); openPanel('Shop', panelShop); };
 $('navProfile').onclick = () => { SFX.click(); openPanel('Profile', panelProfile); };
 $('navArenas').onclick = () => { SFX.click(); openPanel('Arenas', panelArenas); };
 $('navBoard').onclick = () => { SFX.click(); openLeaderboard(); };
+$('navAwards').onclick = () => { SFX.click(); openPanel('Awards', panelAwards); };
 // Tapping your own trophy count going to the standings is the thing people try.
 $('tbTrophies').onclick = () => { SFX.click(); openLeaderboard(); };
 $('navChallenges').onclick = () => { SFX.click(); openPanel('Daily Challenges', panelChallenges); };

@@ -122,3 +122,31 @@ function arenaFor(trophies) {
 function xpForLevel(level) {
   return 100 + (level - 1) * 45;
 }
+
+// Achievements. Daily challenges give you a reason to play today; these are the
+// long game -- one-offs you earn once and keep. Each is a plain predicate over the
+// save plus whatever just happened, so adding one never means touching the engine.
+const ACHIEVEMENTS = [
+  { id: 'first_win',   name: 'First Blood',     desc: 'Win your first match',              coins: 100, test: (s) => s.wins >= 1 },
+  { id: 'win_10',      name: 'Regular',         desc: 'Win 10 matches',                    coins: 200, test: (s) => s.wins >= 10 },
+  { id: 'win_50',      name: 'Veteran',         desc: 'Win 50 matches',                    coins: 600, test: (s) => s.wins >= 50 },
+  { id: 'streak_3',    name: 'Hat Trick',       desc: 'Win 3 matches in a row',            coins: 150, test: (s) => s.bestStreak >= 3 },
+  { id: 'streak_10',   name: 'Unstoppable',     desc: 'Win 10 matches in a row',           coins: 800, test: (s) => s.bestStreak >= 10 },
+  { id: 'played_50',   name: 'Committed',       desc: 'Play 50 matches',                   coins: 250, test: (s) => s.matches >= 50 },
+  { id: 'prizes_100',  name: 'Collector',       desc: 'Win 100 Prize Cards',               coins: 400, test: (s) => s.prizeCards >= 100 },
+  { id: 'arena_3',     name: 'Rooftop Regular', desc: 'Reach Arena 3',                     coins: 200, test: (s) => arenaFor(s.highestTrophies).n >= 3 },
+  { id: 'arena_6',     name: 'Sky High',        desc: 'Reach Arena 6',                     coins: 500, test: (s) => arenaFor(s.highestTrophies).n >= 6 },
+  { id: 'arena_10',    name: 'Champion',        desc: 'Reach Arena 10',                    coins: 1500, test: (s) => arenaFor(s.highestTrophies).n >= 10 },
+  { id: 'level_10',    name: 'Seasoned',        desc: 'Reach level 10',                    coins: 300, test: (s) => s.level >= 10 },
+  { id: 'level_25',    name: 'Old Hand',        desc: 'Reach level 25',                    coins: 900, test: (s) => s.level >= 25 },
+  { id: 'rich',        name: 'Loaded',          desc: 'Hold 5,000 coins at once',          coins: 300, test: (s) => s.coins >= 5000 },
+
+  // These need to know what just happened, not only the totals.
+  { id: 'low_win',     name: 'Cheeky',          desc: 'Win a round with a 1 or a 2',       coins: 250, test: (s, e) => e.lowCard },
+  { id: 'big_pot',     name: 'Jackpot',         desc: 'Take a pot of 3 or more at once',   coins: 350, test: (s, e) => e.bigPot },
+  { id: 'sudden',      name: 'Nerves of Steel', desc: 'Win in Sudden Death',               coins: 400, test: (s, e) => e.suddenWin },
+  { id: 'spy',         name: 'Spy',             desc: 'Peek at an opponent and win that round', coins: 300, test: (s, e) => e.spyWin },
+  { id: 'no_peeks',    name: 'Blind Faith',     desc: 'Win a match without peeking once',  coins: 350, test: (s, e) => e.wonWithoutPeeking },
+];
+
+function achievementById(id) { return ACHIEVEMENTS.find(a => a.id === id); }

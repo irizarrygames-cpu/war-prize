@@ -396,7 +396,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: clamp(6px, 1.4vw, 10px);
   margin: calc(var(--sp) * 1.4) 0 var(--sp);
   width: 100%;
@@ -2228,3 +2228,23 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
 }
 .peek-price.too-dear { background: var(--panel-2); color: var(--dim); }
 .hand-card { position: relative; }
+
+/* ================= awards ================= */
+
+.award-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  background: var(--panel-2);
+  border: 3px solid var(--outline);
+  border-radius: 12px;
+  padding: 9px 11px;
+  opacity: 0.55;
+}
+.award-row.got { opacity: 1; background: #3a3218; border-color: var(--outline); }
+.award-medal { font-size: 22px; flex: none; }
+.award-text { flex: 1; min-width: 0; }
+.award-name { font-size: 13px; font-weight: 900; letter-spacing: 0.6px; }
+.award-desc { font-size: 11px; font-weight: 800; color: var(--dim); }
+.award-row.got .award-desc { color: #c8b98a; }
+.award-coins { font-size: 12px; font-weight: 900; color: var(--gold); flex: none; }

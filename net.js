@@ -269,7 +269,8 @@ function startOnlineMatch(info) {
     endsAt: performance.now() + info.seconds * 1000,
     lastShown: info.seconds,
     timers: [],
-    stats: { prizeCards: 0, wonLowCard: false, reachedSudden: false },
+    stats: { prizeCards: 0, wonLowCard: false, reachedSudden: false,
+             bigPot: false, spyWin: false, peeksUsed: 0 },
   };
 
   // A match always wins over the lesson.
@@ -456,7 +457,10 @@ function onlineReveal(d) {
     const winner = d.winner === null ? null : M.players[localIndex(d.winner)];
     if (winner && winner.id === 0) {
       M.stats.prizeCards += d.gained;
-      if (winner.card <= 3) M.stats.wonLowCard = true;
+      if (winner.card <= 2) M.stats.wonLowCard = true;
+      if (d.gained >= 3) M.stats.bigPot = true;
+      // "Spy": you paid to look at somebody and then took the round off them.
+      if (M.seen && Object.keys(M.seen).some(k => k !== 'self')) M.stats.spyWin = true;
     }
     (d.reactions || []).forEach(r => {
       const p = M.players[localIndex(r.seat)];
@@ -543,6 +547,18 @@ function onlineMatchEnd(d) {
   if (d.place === 0) { SFX.victory(); playVictoryFx(SAVE.equipped.victory); }
   else SFX.defeat();
   setTimeout(() => SFX.trophy(), 900);
+
+  // Friendlies stake nothing, so they earn nothing here either.
+  if (rewards) {
+    const earned = checkAchievements({
+      lowCard: M.stats.wonLowCard,
+      bigPot: M.stats.bigPot,
+      suddenWin: M.sudden && d.place === 0,
+      spyWin: M.stats.spyWin,
+      wonWithoutPeeking: d.place === 0 && M.stats.peeksUsed === 0,
+    });
+    if (earned.length) showAchievements(earned);
+  }
 
   if (rewards) playRewardFx(rewards);
   M = null;

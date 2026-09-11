@@ -38,6 +38,7 @@ const DEFAULT_SAVE = {
     victory: 'confetti',
   },
   challenges: { date: '', list: [] },
+  achievements: [],          // ids earned, in the order they were earned
 };
 
 /* ---------------- transport ---------------- */
@@ -202,6 +203,27 @@ function hasClaimableChallenge() {
     const def = challengeDef(e.id);
     return def && !e.claimed && e.progress >= def.target;
   });
+}
+
+/* ---------------- achievements ---------------- */
+
+function hasAchievement(id) { return SAVE.achievements.includes(id); }
+
+// Called after anything that could have earned one. Returns the ones newly earned
+// so the caller can celebrate them; the coins are paid here.
+function checkAchievements(event = {}) {
+  const earned = [];
+  for (const a of ACHIEVEMENTS) {
+    if (SAVE.achievements.includes(a.id)) continue;
+    let passed = false;
+    try { passed = !!a.test(SAVE, event); } catch (e) { passed = false; }
+    if (!passed) continue;
+    SAVE.achievements.push(a.id);
+    SAVE.coins += a.coins;
+    earned.push(a);
+  }
+  if (earned.length) persist();
+  return earned;
 }
 
 /* ---------------- progression ---------------- */
