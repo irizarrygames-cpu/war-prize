@@ -24,7 +24,9 @@ function connectEvents() {
       const res = await api('poll');
       if (gen !== POLLING) return;
       if (!res || !res.ok) {
-        if (res && res.unauthorized) return;             // signed out elsewhere
+        // Never just stop. Returning quietly here left players staring at a
+        // matchmaking screen that would never move, with nothing to tell them why.
+        if (res && res.unauthorized) { sessionLost(); return; }
         await new Promise(r => setTimeout(r, 1500));      // server hiccup, back off
         continue;
       }
@@ -36,6 +38,71 @@ function connectEvents() {
 }
 
 function disconnectEvents() { POLLING++; }
+
+// The session is gone -- expired, or signed in somewhere else. Say so and hand back
+// the sign-in screen rather than leaving the game frozen.
+function sessionLost() {
+  if (!AUTH_TOKEN) return;
+  storeToken(null);
+  AUTH_TOKEN = null;
+  CURRENT_USER = null;
+  SAVE = null;
+  IS_ADMIN = false;
+  M = null;
+  clearQueueWatchdog();
+  document.body.className = 'arena-1';
+  paintScene($('authBg'), 1);
+  setAuthMode('login');
+  show('authScreen');
+  toast('Signed out — sign in again');
+  SFX.error();
+}
+
+// The server took us off the queue without starting anything -- usually because the
+// connection looked dead at the moment it tried. Go back rather than wait for ever.
+function queueDropped() {
+  clearQueueWatchdog();
+  clearInterval(queueTimer);
+  queueTimer = null;
+  if (M) return;
+  show('menuScreen');
+  renderMenu();
+  toast('Lost your place in the queue — try again');
+  SFX.error();
+}
+
+// If the countdown runs out and no match turns up, something went wrong upstream.
+// Ask the server what is actually happening, and if it says nothing, stop waiting
+// instead of showing a frozen "starting in 0s".
+let queueWatchdog = null;
+
+// How long past the moment a match was due before we decide something is wrong.
+// This has to clear the server's own wait for real players -- an earlier version
+// fired at 20s, inside the 30s the server spends looking, and cancelled queues
+// that were about to start perfectly well.
+const QUEUE_GRACE_MS = 15000;
+
+function clearQueueWatchdog() {
+  if (queueWatchdog) { clearTimeout(queueWatchdog); queueWatchdog = null; }
+}
+
+function armQueueWatchdog(msUntilStart) {
+  clearQueueWatchdog();
+  const delay = Math.max(5000, (msUntilStart == null ? 30000 : msUntilStart)) + QUEUE_GRACE_MS;
+  queueWatchdog = setTimeout(async () => {
+    queueWatchdog = null;
+    if (M || $('mmScreen').classList.contains('hidden')) return;
+    const s = await api('sync');
+    if (s && s.ok && s.match) { handleServerEvent({ type: 'match-start', ...s.match }); return; }
+    if (s && s.unauthorized) { sessionLost(); return; }
+    if (M || $('mmScreen').classList.contains('hidden')) return;
+    await api('queue/leave');
+    show('menuScreen');
+    renderMenu();
+    toast('Could not start a match — try again');
+    SFX.error();
+  }, delay);
+}
 
 // Browsers throttle background tabs hard; check in the moment we're visible again.
 document.addEventListener('visibilitychange', () => {
@@ -52,7 +119,8 @@ function handleServerEvent(d) {
     case 'invite':        showInvite(d); break;
     case 'invite-cancelled': dismissInvite(d.inviteId); break;
     case 'invite-declined':  toast(`${d.by} declined`); SFX.error(); break;
-    case 'queue':         renderQueue(d); break;
+    case 'queue':         renderQueue(d); armQueueWatchdog(d.msLeft); break;
+    case 'queue-dropped': queueDropped(); break;
     case 'match-start':   startOnlineMatch(d); break;
     case 'round':         onlineRound(d); break;
     case 'picked':        onlineOpponentPicked(d); break;
@@ -190,14 +258,16 @@ function joinQueue() {
   const m = modeOf(SAVE.mode);
   $('mmTitle').textContent = 'FINDING PLAYERS';
   renderQueue({ waiting: 1, need: m.players, msLeft: 30000 });
+  armQueueWatchdog();
   api('queue/join', { mode: SAVE.mode }).then(r => {
-    if (!r.ok) { toast(r.msg || 'Could not join queue'); show('menuScreen'); }
+    if (!r.ok) { clearQueueWatchdog(); toast(r.msg || 'Could not join queue'); show('menuScreen'); renderMenu(); }
   });
 }
 
 function leaveQueueUi() {
   clearInterval(queueTimer);
   queueTimer = null;
+  clearQueueWatchdog();
   api('queue/leave');
   show('menuScreen');
   renderMenu();
@@ -272,6 +342,8 @@ function startOnlineMatch(info) {
     stats: { prizeCards: 0, wonLowCard: false, reachedSudden: false,
              bigPot: false, spyWin: false, peeksUsed: 0 },
   };
+
+  clearQueueWatchdog();
 
   // A match always wins over the lesson.
   if (typeof TUTORIAL !== 'undefined' && TUTORIAL.isRunning()) TUTORIAL.abort();

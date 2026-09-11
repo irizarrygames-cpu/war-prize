@@ -8,6 +8,7 @@ const el = (tag, cls, html) => {
   return n;
 };
 
+const PEEK_COLOR = '#b06bff';   // matches --peek in the stylesheet
 const SELECT_MS = 3600;
 const BEAT_MS = 420;
 const REVEAL_MS = 620;
@@ -641,7 +642,11 @@ function buildSeats() {
   M.players.forEach((p, i) => {
     const seat = $('seat' + slots[i]);
     seat.classList.toggle('you', p.id === 0);
-    seat.onclick = () => { if (peekMode && i !== 0) spendPeek(i); };
+    seat.onclick = () => {
+      if (!peekMode) return;
+      if (i !== 0 && !seat.classList.contains('out')) spendPeek(i);
+      else { SFX.back(); setPeekMode(false); }   // your own seat is not a target
+    };
 
     const slot = el('div', 'seat-card-slot');
     slot.appendChild(makeCard(p.cardBack));
@@ -733,8 +738,14 @@ function renderHand() {
     wrap.appendChild(el('div', 'hand-tag' + (known ? ' known' : ''), known ? 'KNOWN' : 'GAMBLE'));
     wrap.onclick = () => {
       if (M.phase !== 'choose' || human.pick !== null) return;
-      // While a peek is armed a tap means "look at this", not "play this".
-      if (peekMode) { if (idx === 1) spendPeek('self'); return; }
+      // While a peek is armed a tap means "look at this", not "play this" -- but
+      // tapping anything that is not a target used to do nothing whatsoever, which
+      // reads as the game having frozen. So it cancels the peek instead.
+      if (peekMode) {
+        if (idx === 1) spendPeek('self');
+        else { SFX.back(); setPeekMode(false); }
+        return;
+      }
       commitPick(human, idx);
     };
     holder.appendChild(wrap);
@@ -844,7 +855,7 @@ function showSelfPeek(card) {
   wrap.querySelector('.hand-tag').classList.add('known');
 
   const c = FX.centreOf(cardEl);
-  FX.ring(c.x, c.y, { size: 150, color: '#6fd6ff', life: 460, thick: 6 });
+  FX.ring(c.x, c.y, { size: 150, color: PEEK_COLOR, life: 460, thick: 6 });
   setTimeout(() => {
     FX.floatText(c.x, c.y - 60, String(card), 'cool');
     SFX.peekReveal(card);
@@ -869,7 +880,7 @@ function showOpponentPeek(localIndex, card) {
   tag.classList.add('pop');
 
   const c = FX.centreOf(p.seat.querySelector('.seat-info'));
-  FX.ring(c.x, c.y, { size: 150, color: '#6fd6ff', life: 460, thick: 6 });
+  FX.ring(c.x, c.y, { size: 150, color: PEEK_COLOR, life: 460, thick: 6 });
   setTimeout(() => {
     FX.floatText(c.x, c.y - 44, String(card), 'cool');
     SFX.peekReveal(card);

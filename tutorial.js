@@ -374,7 +374,7 @@ const TUTORIAL = (() => {
         wrap.querySelector('.hand-tag').textContent = 'SEEN';
         wrap.querySelector('.hand-tag').classList.add('known');
         const cc = FX.centreOf(c);
-        FX.ring(cc.x, cc.y, { size: 150, color: '#6fd6ff', life: 460, thick: 6 });
+        FX.ring(cc.x, cc.y, { size: 150, color: PEEK_COLOR, life: 460, thick: 6 });
         await wait(240);
         FX.floatText(cc.x, cc.y - 60, '2', 'cool');
         SFX.peekReveal(2);

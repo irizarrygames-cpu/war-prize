@@ -14,7 +14,7 @@ const { screenUsername } = require('./moderation');
 
 const PORT = Number(process.argv[2] || process.env.PORT || 8421);
 // Bumped whenever something worth verifying from outside ships. /api/health reports it.
-const BUILD = 12;
+const BUILD = 14;
 const ROOT = __dirname;
 const DATA_FILE = path.join(ROOT, 'data.json');
 
@@ -364,9 +364,50 @@ function validateNewPassword(username, password) {
 
 function userIdFromToken(token) { return tokens.get(String(token || '')); }
 
+// Sessions used to live only in memory, so every restart signed everybody out --
+// and on a free host that is every deploy and every wake from idle. Worse, the
+// client said nothing about it: the poll came back unauthorised, the loop quietly
+// stopped, and the player sat on "starting in 0s" for ever. Keeping them on the
+// account record means a restart no longer throws anyone out.
+const SESSIONS_PER_USER = 5;                       // a phone, a laptop, a spare
+const SESSION_MAX_AGE = 30 * 24 * 60 * 60 * 1000;  // 30 days
+
+function rememberSession(id, token) {
+  const u = getUser(id);
+  if (!u) return;
+  const now = Date.now();
+  u.sessions = (u.sessions || []).filter(s => s && s.token && now - (s.at || 0) < SESSION_MAX_AGE);
+  u.sessions.push({ token, at: now });
+  while (u.sessions.length > SESSIONS_PER_USER) {
+    const dropped = u.sessions.shift();
+    tokens.delete(dropped.token);
+  }
+  saveDB();
+}
+
+function forgetSession(token) {
+  const id = tokens.get(token);
+  tokens.delete(token);
+  const u = id && getUser(id);
+  if (u && u.sessions) { u.sessions = u.sessions.filter(s => s.token !== token); saveDB(); }
+}
+
+// Rebuilds the in-memory index from what was saved.
+function restoreSessions() {
+  const now = Date.now();
+  let live = 0;
+  for (const [id, u] of Object.entries(DB.users)) {
+    if (!u.sessions) continue;
+    u.sessions = u.sessions.filter(s => s && s.token && now - (s.at || 0) < SESSION_MAX_AGE);
+    for (const s of u.sessions) { tokens.set(s.token, id); live++; }
+  }
+  return live;
+}
+
 function issueToken(id) {
   const token = crypto.randomBytes(24).toString('hex');
   tokens.set(token, id);
+  rememberSession(id, token);
   return token;
 }
 
@@ -784,6 +825,13 @@ function launch(key, fillBots) {
   const taken = q.splice(0, Math.min(need, q.length));
   taken.forEach(e => clearTimeout(e.timer));
   const ids = taken.map(e => e.id).filter(uid => isOnline(uid) && !matchOf(uid));
+
+  // Anyone dropped here has already been taken off the queue, so without a word to
+  // their client they sit on "starting in 0s" for ever waiting for a match that is
+  // never coming. That is exactly the freeze players were hitting.
+  const dropped = taken.map(e => e.id).filter(uid => !ids.includes(uid));
+  dropped.forEach(uid => push(uid, 'queue-dropped', {}));
+
   if (!ids.length) { broadcastQueue(key); return; }
 
   startMatch(ids, key);
@@ -1068,7 +1116,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (route === '/api/logout') {
-    tokens.delete(String(body.token));
+    forgetSession(String(body.token));
     return sendJSON(res, 200, { ok: true });
   }
 
@@ -1302,9 +1350,10 @@ for (const signal of ['SIGTERM', 'SIGINT']) {
     process.exit(1);
   }
   for (const id of Object.keys(DB.users)) persisted.set(id, JSON.stringify(DB.users[id]));
+  const restored = restoreSessions();
 
   server.listen(PORT, () => {
     console.log(`War Prize server on http://localhost:${PORT}`);
-    console.log(`accounts: ${Object.keys(DB.users).length} (storage: ${store.kind})`);
+    console.log(`accounts: ${Object.keys(DB.users).length} (storage: ${store.kind}), sessions restored: ${restored}`);
   });
 })();
