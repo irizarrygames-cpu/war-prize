@@ -236,7 +236,7 @@ function panelCards() {
   wrap.appendChild(el('div', 'panel-sub', 'Card Backs'));
   wrap.appendChild(cosmeticGrid('cardBacks', 'cardBack', CARD_BACKS, item => {
     const c = el('div', 'preview-card');
-    c.appendChild(el('div', 'card-face card-back cb-' + item.id));
+    c.appendChild(paintCardBack(el('div', 'card-face card-back cb-' + item.id), item.id));
     return c;
   }));
   wrap.appendChild(el('div', 'panel-sub', 'Table Skins'));
@@ -699,7 +699,7 @@ function buildSeats() {
 function makeCard(backId, value) {
   const card = el('div', 'card');
   const inner = el('div', 'card-inner');
-  inner.appendChild(el('div', 'card-face card-back cb-' + backId));
+  inner.appendChild(paintCardBack(el('div', 'card-face card-back cb-' + backId), backId));
   const front = el('div', 'card-face card-front');
   front.appendChild(el('span', 'card-num', value == null ? '' : String(value)));
   inner.appendChild(front);

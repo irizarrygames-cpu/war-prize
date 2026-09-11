@@ -66,6 +66,7 @@ const TUTORIAL = (() => {
     inner.className = 'card-inner';
     const back = document.createElement('div');
     back.className = 'card-face card-back cb-classic';
+    paintCardBack(back, 'classic');
     const front = document.createElement('div');
     front.className = 'card-face card-front';
     const num = document.createElement('span');
