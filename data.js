@@ -14,16 +14,16 @@ const DIFFICULTY_LABELS = ['Easy', 'Easy', 'Normal', 'Normal', 'Tricky', 'Tricky
 function difficultyFor(arenaN) { return DIFFICULTY_LABELS[arenaN - 1] || 'Normal'; }
 
 const ARENAS = [
-  { n: 1,  name: 'Backyard',         trophies: 0,    icon: '🏡' },
-  { n: 2,  name: 'School Cafeteria', trophies: 300,  icon: '🍎' },
-  { n: 3,  name: 'Rooftop',          trophies: 700,  icon: '🌆' },
-  { n: 4,  name: 'Pirate Ship',      trophies: 1200, icon: '🏴‍☠️' },
-  { n: 5,  name: 'Volcano',          trophies: 1800, icon: '🌋' },
-  { n: 6,  name: 'Space Station',    trophies: 2500, icon: '🚀' },
-  { n: 7,  name: 'Royal Castle',     trophies: 3300, icon: '👑' },
-  { n: 8,  name: 'Cyber Arena',      trophies: 4200, icon: '🤖' },
-  { n: 9,  name: 'The Void',         trophies: 5200, icon: '🌌' },
-  { n: 10, name: 'Champion Arena',   trophies: 6500, icon: '🏆' },
+  { n: 1,  name: 'Backyard',         trophies: 0,    icon: '🏡', accent: '#5fa63f' },
+  { n: 2,  name: 'School Cafeteria', trophies: 300,  icon: '🍎', accent: '#cf9a4e' },
+  { n: 3,  name: 'Rooftop',          trophies: 700,  icon: '🌆', accent: '#ff9d6c' },
+  { n: 4,  name: 'Pirate Ship',      trophies: 1200, icon: '🏴‍☠️', accent: '#2e97be' },
+  { n: 5,  name: 'Volcano',          trophies: 1800, icon: '🌋', accent: '#ff6b2c' },
+  { n: 6,  name: 'Space Station',    trophies: 2500, icon: '🚀', accent: '#6a5bd1' },
+  { n: 7,  name: 'Royal Castle',     trophies: 3300, icon: '👑', accent: '#c7b8a0' },
+  { n: 8,  name: 'Cyber Arena',      trophies: 4200, icon: '🤖', accent: '#31e0ff' },
+  { n: 9,  name: 'The Void',         trophies: 5200, icon: '🌌', accent: '#8a4bff' },
+  { n: 10, name: 'Champion Arena',   trophies: 6500, icon: '🏆', accent: '#ffc93c' },
 ];
 
 const CARD_BACKS = [

@@ -14,7 +14,7 @@ const { screenUsername } = require('./moderation');
 
 const PORT = Number(process.argv[2] || process.env.PORT || 8421);
 // Bumped whenever something worth verifying from outside ships. /api/health reports it.
-const BUILD = 14;
+const BUILD = 15;
 const ROOT = __dirname;
 const DATA_FILE = path.join(ROOT, 'data.json');
 

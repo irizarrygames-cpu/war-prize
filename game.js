@@ -74,6 +74,24 @@ function closeAskPass(value) {
   done(value);
 }
 
+// A number followed by its unit, with the unit drawn rather than an emoji dropped
+// into the middle of a sentence. Returns a node because these go into labels.
+function withIcon(text, name, cls) {
+  const wrap = el('span', 'val' + (cls ? ' ' + cls : ''));
+  wrap.appendChild(el('span', 'val-num', text));
+  const ico = el('span', 'val-ico');
+  ico.innerHTML = icon(name);
+  wrap.appendChild(ico);
+  return wrap;
+}
+
+function setWithIcon(node, text, name, tail) {
+  node.textContent = '';
+  node.appendChild(withIcon(text, name));
+  if (tail) node.appendChild(el('span', 'val-tail', tail));
+  return node;
+}
+
 function toast(msg) {
   const t = $('toast');
   t.textContent = msg;
@@ -86,6 +104,7 @@ function toast(msg) {
 
 function renderMenu() {
   if (!SAVE) return;
+  paintIcons();
   buildMenuBackdrop();
   renderModePicker();
   refreshChallenges();
@@ -99,7 +118,11 @@ function renderMenu() {
   $('menuTitle').textContent = title ? title.name : '';
   const ar = arenaFor(SAVE.trophies);
   $('menuArenaName').textContent = `Arena ${ar.n} · ${ar.name}`;
-  $('menuArenaIcon').textContent = ar.icon;
+  // Each arena is told apart by its colour rather than by a different emoji. The
+  // emoji were the only pictures in the interface nobody had drawn.
+  $('menuArenaIcon').innerHTML = icon('arenas');
+  $('menuArenaIcon').style.color = ar.accent;
+  $('menuArenaFill').style.background = ar.accent;
   $('menuDifficulty').textContent = difficultyFor(ar.n);
   $('menuDifficulty').className = 'diff-badge d-' + difficultyFor(ar.n).toLowerCase();
 
@@ -107,8 +130,7 @@ function renderMenu() {
   if (next) {
     const span = next.trophies - ar.trophies;
     $('menuArenaFill').style.width = Math.min(100, ((SAVE.trophies - ar.trophies) / span) * 100) + '%';
-    $('menuArenaNext').textContent =
-      `${(next.trophies - SAVE.trophies).toLocaleString()} 🏆 to ${next.name}`;
+    setWithIcon($('menuArenaNext'), (next.trophies - SAVE.trophies).toLocaleString(), 'trophy', ' to ' + next.name);
   } else {
     $('menuArenaFill').style.width = '100%';
     $('menuArenaNext').textContent = 'Top arena reached';
@@ -186,7 +208,10 @@ function cosmeticGrid(kind, slot, list, renderPreview, hideName) {
     const cell = el('div', 'grid-cell' + (equipped ? ' equipped' : '') + (owned ? '' : ' locked'));
     cell.appendChild(renderPreview(item));
     if (!hideName) cell.appendChild(el('div', 'cell-name', item.name));
-    cell.appendChild(el('div', 'cell-cost', owned ? (equipped ? 'EQUIPPED' : 'Tap to equip') : `${item.cost} 🪙`));
+    const cost = el('div', 'cell-cost');
+    if (owned) cost.textContent = equipped ? 'EQUIPPED' : 'Tap to equip';
+    else cost.appendChild(withIcon(String(item.cost), 'coin'));
+    cell.appendChild(cost);
     cell.onclick = () => {
       if (owned) {
         equip(slot, item.id);
@@ -235,7 +260,10 @@ function panelShop() {
     const owned = isUnlocked('reactions', r.id);
     const cell = el('div', 'grid-cell' + (owned ? ' equipped' : ' locked'));
     cell.appendChild(el('div', 'preview-victory', r.emoji));
-    cell.appendChild(el('div', 'cell-cost', owned ? 'OWNED' : `${r.cost} 🪙`));
+    const rcost = el('div', 'cell-cost');
+    if (owned) rcost.textContent = 'OWNED';
+    else rcost.appendChild(withIcon(String(r.cost), 'coin'));
+    cell.appendChild(rcost);
     cell.onclick = () => {
       if (owned) return;
       const res = buy('reactions', r.id, r.cost);
@@ -274,7 +302,7 @@ function panelLeaderboard() {
   const meta = el('div');
   meta.appendChild(el('div', 'board-me-name', SAVE.name));
   meta.appendChild(el('div', 'board-me-sub',
-    mine ? `${mine.trophies.toLocaleString()} 🏆 · out of ${BOARD.players.toLocaleString()} players`
+    mine ? `${mine.trophies.toLocaleString()} trophies · out of ${BOARD.players.toLocaleString()} players`
          : 'Play a match to get on the board'));
   head.appendChild(meta);
   wrap.appendChild(head);
@@ -289,7 +317,7 @@ function panelLeaderboard() {
     row.appendChild(el('span', 'board-av', p.avatar));
     row.appendChild(el('span', 'board-name', p.name));
     row.appendChild(el('span', 'board-lvl', 'Lv' + p.level));
-    row.appendChild(el('span', 'board-tr', p.trophies.toLocaleString() + ' 🏆'));
+    row.appendChild(withIcon(p.trophies.toLocaleString(), 'trophy', 'board-tr'));
     list.appendChild(row);
   });
   if (!BOARD.top.length) {
@@ -344,7 +372,7 @@ function panelAdmin() {
       if (u.flagged) row.appendChild(el('span', 'board-flag', '⚠️'));
       row.appendChild(el('span', 'board-name', u.name));
       row.appendChild(el('span', 'board-lvl', u.online ? 'online' : ''));
-      row.appendChild(el('span', 'board-tr', u.trophies.toLocaleString() + ' 🏆'));
+      row.appendChild(withIcon(u.trophies.toLocaleString(), 'trophy', 'board-tr'));
       if (u.id !== CURRENT_USER) {
         const del = el('button', 'admin-del', 'Delete');
         del.onclick = async () => {
@@ -423,7 +451,7 @@ function panelAwards() {
     txt.appendChild(el('div', 'award-name', a.name));
     txt.appendChild(el('div', 'award-desc', a.desc));
     row.appendChild(txt);
-    row.appendChild(el('span', 'award-coins', (got ? '' : '+') + a.coins + ' 🪙'));
+    row.appendChild(withIcon((got ? '' : '+') + a.coins, 'coin', 'award-coins'));
     list.appendChild(row);
   }
   wrap.appendChild(list);
@@ -466,7 +494,7 @@ function panelProfile() {
 
   const stats = [
     ['Level', SAVE.level],
-    ['Trophies', SAVE.trophies.toLocaleString() + ' 🏆'],
+    ['Trophies', SAVE.trophies.toLocaleString()],
     ['Current Arena', `${ar.n} · ${ar.name}`],
     ['Highest Arena', `${arenaFor(SAVE.highestTrophies).n} · ${arenaFor(SAVE.highestTrophies).name}`],
     ['Total Wins', SAVE.wins],
@@ -538,7 +566,10 @@ function panelArenas() {
       (isCurrent ? ' current' : '') + (isNext ? ' next' : ''));
 
     const thumb = el('div', 'arena-thumb arena-bg-' + a.n);
-    thumb.appendChild(el('span', 'arena-emblem', unlocked ? a.icon : '🔒'));
+    const emblem = el('span', 'arena-emblem');
+    if (unlocked) { emblem.innerHTML = icon('arenas'); emblem.style.color = a.accent; }
+    else emblem.textContent = '🔒';
+    thumb.appendChild(emblem);
     row.appendChild(thumb);
 
     const info = el('div', 'arena-info');
@@ -556,11 +587,11 @@ function panelArenas() {
       track.appendChild(fill);
       info.appendChild(track);
       info.appendChild(el('div', 'arena-req',
-        `${(next.trophies - SAVE.trophies).toLocaleString()} 🏆 to ${next.name}`));
+        `${(next.trophies - SAVE.trophies).toLocaleString()} trophies to ${next.name}`));
     } else {
       info.appendChild(el('div', 'arena-req', unlocked
         ? (isCurrent ? 'Top arena — you made it' : 'Unlocked')
-        : `${a.trophies.toLocaleString()} 🏆 needed`));
+        : `${a.trophies.toLocaleString()} trophies needed`));
     }
 
     row.appendChild(info);
@@ -590,7 +621,7 @@ function panelChallenges() {
     const btn = el('button', 'chal-btn');
     if (entry.claimed) { btn.textContent = 'Claimed'; btn.disabled = true; }
     else if (done) {
-      btn.textContent = `${def.coins} 🪙`;
+      btn.textContent = ''; btn.appendChild(withIcon(String(def.coins), 'coin'));
       btn.classList.add('ready');
       btn.onclick = () => {
         if (entry.claimed) return;      // a fast double tap must not pay out twice
@@ -603,7 +634,7 @@ function panelChallenges() {
         refreshPanel();
         renderMenu();
       };
-    } else { btn.textContent = `${def.coins} 🪙`; btn.disabled = true; }
+    } else { btn.textContent = ''; btn.appendChild(withIcon(String(def.coins), 'coin')); btn.disabled = true; }
     row.appendChild(btn);
     wrap.appendChild(row);
   }

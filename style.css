@@ -19,7 +19,11 @@
   --peek-dk: #7a34d6;
   --peek-ink: #23073f;
   --blue-dk: #2450c8;
-  font-family: "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+  /* Nunito first: it is a rounded face that matches chunky outlined shapes far
+     better than the default UI sans, and it ships on a lot of machines. The rest
+     is the usual fallback ladder. */
+  font-family: Nunito, "Segoe UI Variable", "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+  font-synthesis-weight: none;
 }
 
 html, body { height: 100%; }
@@ -168,7 +172,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   font-weight: 900;
   font-size: 15px;
   letter-spacing: 0.4px;
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
 }
 
 #tbLevel { flex-direction: column; align-items: flex-start; gap: 5px; margin-right: auto; }
@@ -184,7 +188,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   padding: 3px 8px;
   font-weight: 900;
   font-size: 15px;
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
 }
 
 .tb-level-bar {
@@ -225,7 +229,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   border: 4px solid var(--outline);
   border-radius: 16px;
   padding: clamp(7px, 1.1vh, 11px) 14px clamp(8px, 1.2vh, 12px);
-  box-shadow: 0 6px 0 var(--outline);
+  box-shadow: 2px 6px 0 var(--outline);
 }
 .arena-card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
 .arena-card-icon { font-size: 22px; }
@@ -293,7 +297,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   width: clamp(52px, 8vh, 76px); height: clamp(52px, 8vh, 76px);
   font-size: clamp(28px, 4.4vh, 42px);
   border-radius: 18px;
-  box-shadow: 0 5px 0 var(--outline);
+  box-shadow: 1px 5px 0 var(--outline);
 }
 
 .menu-player {
@@ -325,7 +329,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   display: inline-block;
   background: #ff6b2c;
   border: 3px solid var(--outline);
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
   padding: 6px 18px;
   border-radius: 999px;
   font-weight: 900;
@@ -353,7 +357,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   border-radius: 14px;
   padding: clamp(6px, 1vh, 8px) 6px;
   cursor: pointer;
-  box-shadow: 0 5px 0 var(--outline);
+  box-shadow: 1px 5px 0 var(--outline);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -368,7 +372,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   color: var(--dim); text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
 }
-.mode-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--outline); }
+.mode-btn:active { transform: translateY(4px); box-shadow: 1px 1px 0 var(--outline); }
 .mode-btn.active { background: var(--gold); color: #3a2400; }
 .mode-btn.active small { color: #6b4a00; }
 
@@ -385,13 +389,13 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   letter-spacing: 3px;
   padding: clamp(11px, 1.9vh, 16px) clamp(44px, 14vw, 76px);
   cursor: pointer;
-  box-shadow: 0 8px 0 var(--gold-dk), 0 8px 0 4px var(--outline);
+  box-shadow: 2px 8px 0 var(--gold-dk), 0 8px 0 4px var(--outline);
   transition: transform 0.06s, box-shadow 0.06s;
 }
 .play-btn:hover { background: #ffd75e; }
 .play-btn:active {
   transform: translateY(6px);
-  box-shadow: 0 2px 0 var(--gold-dk), 0 2px 0 4px var(--outline);
+  box-shadow: 1px 2px 0 var(--gold-dk), 1px 2px 0 4px var(--outline);
 }
 
 /* Six columns where there's room, three where there isn't -- a fixed grid either
@@ -430,12 +434,12 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   justify-content: center;
   gap: 3px;
   min-width: 0;
-  box-shadow: 0 5px 0 var(--outline);
+  box-shadow: 1px 5px 0 var(--outline);
   transition: transform 0.06s, box-shadow 0.06s, background 0.12s;
 }
 .nav-btn span { font-size: clamp(16px, 4.6vw, 20px); }
 .nav-btn:hover { background: var(--panel-2); }
-.nav-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--outline); }
+.nav-btn:active { transform: translateY(4px); box-shadow: 1px 1px 0 var(--outline); }
 
 .dot {
   position: absolute; top: -6px; right: -6px;
@@ -480,7 +484,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   border-radius: 22px;
   padding: 22px;
   width: min(92vw, 380px);
-  box-shadow: 0 10px 0 var(--outline);
+  box-shadow: 2px 10px 0 var(--outline);
 }
 
 .auth-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
@@ -495,7 +499,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   font-size: 13px;
   letter-spacing: 2px;
   cursor: pointer;
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
 }
 .auth-tab.active { background: var(--gold); color: #3a2400; }
 
@@ -546,7 +550,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   font-weight: 900;
   letter-spacing: 1px;
   cursor: pointer;
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
 }
 
 .profile-user { color: var(--dim); font-weight: 800; font-size: 12px; letter-spacing: 1px; margin-top: 4px; }
@@ -561,7 +565,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   border-radius: 22px;
   padding: 30px 38px;
   text-align: center;
-  box-shadow: 0 10px 0 var(--outline);
+  box-shadow: 2px 10px 0 var(--outline);
 }
 .mm-title { font-size: 22px; font-weight: 900; letter-spacing: 3px; margin-bottom: 22px; }
 .mm-slots { display: flex; gap: 14px; }
@@ -582,7 +586,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   opacity: 1;
   border-style: solid;
   background: var(--panel-2);
-  box-shadow: 0 5px 0 var(--outline);
+  box-shadow: 1px 5px 0 var(--outline);
   animation: popIn 0.24s;
 }
 .mm-name { font-size: 12px; font-weight: 800; letter-spacing: 0.5px; }
@@ -597,10 +601,10 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   font-weight: 900;
   letter-spacing: 1px;
   cursor: pointer;
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
   transition: transform 0.06s, box-shadow 0.06s;
 }
-.ghost-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--outline); }
+.ghost-btn:active { transform: translateY(3px); box-shadow: 1px 1px 0 var(--outline); }
 
 /* ================= match ================= */
 
@@ -676,7 +680,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   font-weight: 900;
   letter-spacing: 2px;
   font-variant-numeric: tabular-nums;
-  box-shadow: 0 5px 0 var(--outline);
+  box-shadow: 1px 5px 0 var(--outline);
 }
 #matchTimer.urgent { background: var(--bad); color: #fff; }
 #matchTimer.pulse { animation: tickPulse 0.5s ease-out; }
@@ -686,7 +690,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   border-radius: 14px;
   padding: 7px 8px;
   min-width: 190px;
-  box-shadow: 0 5px 0 var(--outline);
+  box-shadow: 1px 5px 0 var(--outline);
 }
 .sb-row {
   display: flex;
@@ -735,7 +739,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   font-weight: 900;
   font-size: 12px;
   letter-spacing: 1.4px;
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
 }
 .tut-skip {
   background: var(--panel);
@@ -747,7 +751,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   font-size: 12px;
   letter-spacing: 1.2px;
   cursor: pointer;
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
   font-family: inherit;
 }
 .tut-skip:hover { color: var(--txt); }
@@ -809,7 +813,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   background: var(--gold);
   border: 4px solid var(--outline);
   border-radius: 16px;
-  box-shadow: 0 5px 0 var(--outline);
+  box-shadow: 1px 5px 0 var(--outline);
   animation: tutBob 2.4s ease-in-out infinite alternate;
 }
 @keyframes tutBob { from { transform: translateY(0); } to { transform: translateY(-5px); } }
@@ -821,7 +825,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   border: 4px solid var(--outline);
   border-radius: 16px;
   padding: 12px 14px;
-  box-shadow: 0 6px 0 var(--outline);
+  box-shadow: 2px 6px 0 var(--outline);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -847,7 +851,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   font-size: 13px;
   letter-spacing: 1.4px;
   cursor: pointer;
-  box-shadow: 0 5px 0 var(--gold-dk), 0 5px 0 3px var(--outline);
+  box-shadow: 1px 5px 0 var(--gold-dk), 0 5px 0 3px var(--outline);
   transition: transform 0.06s, box-shadow 0.06s;
 }
 .tut-next:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--gold-dk), 0 1px 0 3px var(--outline); }
@@ -892,7 +896,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   border: 4px solid var(--outline);
   border-radius: 16px;
   padding: 12px 16px;
-  box-shadow: 0 5px 0 var(--outline);
+  box-shadow: 1px 5px 0 var(--outline);
 }
 .board-me-rank { font-size: 30px; font-weight: 900; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
 .board-me-name { font-size: 18px; font-weight: 900; letter-spacing: 1px; }
@@ -1111,7 +1115,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   justify-items: center;
   border: 6px solid var(--outline);
   border-radius: 26px;
-  box-shadow: 0 9px 0 var(--outline);
+  box-shadow: 2px 9px 0 var(--outline);
 }
 
 /* Phones: start the table below the HUD so the timer and scores never sit on the
@@ -1167,7 +1171,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   background: var(--panel);
   border-radius: 14px;
   padding: 4px clamp(6px, 2.4vw, 12px) 4px 5px;
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
   max-width: 100%;
   min-width: 0;
 }
@@ -1217,7 +1221,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   backface-visibility: hidden;
   border-radius: 8px;
   border: 3px solid var(--outline);
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -1298,7 +1302,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   border-radius: 9px;
   background: var(--gold);
   border: 4px solid var(--outline);
-  box-shadow: 0 5px 0 var(--outline);
+  box-shadow: 1px 5px 0 var(--outline);
   display: grid;
   place-items: center;
   font-weight: 900;
@@ -1318,7 +1322,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   padding: 2px 10px;
   font-weight: 900;
   font-size: 14px;
-  box-shadow: 0 3px 0 var(--outline);
+  box-shadow: 1px 3px 0 var(--outline);
 }
 
 .prize-count.bump { animation: countBump 0.45s cubic-bezier(0.2, 1.8, 0.4, 1); }
@@ -1378,7 +1382,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   letter-spacing: 2px;
   pointer-events: none;
   text-align: center;
-  box-shadow: 0 6px 0 var(--outline);
+  box-shadow: 2px 6px 0 var(--outline);
 }
 #eventBanner.show { animation: bannerIn 0.35s cubic-bezier(0.2, 1.7, 0.4, 1); }
 
@@ -1449,12 +1453,12 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   font-size: 12px;
   letter-spacing: 2px;
   cursor: pointer;
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
   transition: transform 0.06s, box-shadow 0.06s;
 }
 .peek-btn .peek-eye { font-size: 16px; }
 .peek-btn:hover:not(:disabled) { background: var(--panel-2); }
-.peek-btn:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--outline); }
+.peek-btn:active:not(:disabled) { transform: translateY(3px); box-shadow: 1px 1px 0 var(--outline); }
 .peek-btn:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
 .peek-btn.spent { opacity: 0.35; }
 
@@ -1509,10 +1513,10 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   background: var(--panel);
   border-radius: 12px;
   cursor: pointer;
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
   transition: transform 0.06s, box-shadow 0.06s;
 }
-.react-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--outline); }
+.react-btn:active { transform: translateY(3px); box-shadow: 1px 1px 0 var(--outline); }
 
 .quit-btn {
   position: absolute;
@@ -1525,7 +1529,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   font-size: 16px;
   font-weight: 900;
   cursor: pointer;
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
 }
 .quit-btn:hover { background: var(--bad); }
 
@@ -1568,7 +1572,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   flex-direction: column;
   align-items: center;
   gap: 15px;
-  box-shadow: 0 10px 0 var(--outline);
+  box-shadow: 2px 10px 0 var(--outline);
 }
 
 .result-box .play-btn { margin-top: 4px; font-size: 27px; padding: 14px 44px; white-space: nowrap; }
@@ -1605,7 +1609,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   align-items: center;
   gap: 6px;
   font-weight: 900;
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
 }
 .reward .r-val { color: var(--good); }
 .reward.neg .r-val { color: var(--bad); }
@@ -1617,7 +1621,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   padding: 8px;
   border-radius: 10px;
   border: 3px solid var(--outline);
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
   font-weight: 900;
   letter-spacing: 1.5px;
   animation: popIn 0.4s;
@@ -1683,7 +1687,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   max-height: 86vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 10px 0 var(--outline);
+  box-shadow: 2px 10px 0 var(--outline);
 }
 
 .panel-head {
@@ -1704,7 +1708,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   cursor: pointer;
   font-size: 14px;
   font-weight: 900;
-  box-shadow: 0 3px 0 var(--outline);
+  box-shadow: 1px 3px 0 var(--outline);
 }
 .panel-close:hover { background: var(--bad); }
 
@@ -1734,10 +1738,10 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  box-shadow: 0 5px 0 var(--outline);
+  box-shadow: 1px 5px 0 var(--outline);
   transition: transform 0.06s, box-shadow 0.06s;
 }
-.grid-cell:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--outline); }
+.grid-cell:active { transform: translateY(4px); box-shadow: 1px 1px 0 var(--outline); }
 .grid-cell.equipped { background: var(--gold); color: #3a2400; }
 .grid-cell.locked { opacity: 0.78; }
 .cell-name { font-size: 11px; font-weight: 900; text-align: center; }
@@ -1795,7 +1799,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   border-radius: 14px;
   background: var(--panel-2);
   margin-bottom: 10px;
-  box-shadow: 0 5px 0 var(--outline);
+  box-shadow: 1px 5px 0 var(--outline);
   border: 3px solid var(--outline);
 }
 .arena-row.current { background: var(--gold); color: #3a2400; }
@@ -1829,7 +1833,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   border-radius: 14px;
   background: var(--panel-2);
   margin-bottom: 9px;
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
 }
 .chal-row.claimed { opacity: 0.5; }
 .chal-info { flex: 1; }
@@ -1853,7 +1857,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   background: var(--gold);
   color: #3a2400;
   cursor: pointer;
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
 }
 
 /* friends */
@@ -1868,7 +1872,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   border-radius: 12px;
   background: var(--panel-2);
   border: 3px solid var(--outline);
-  box-shadow: 0 4px 0 var(--outline);
+  box-shadow: 1px 4px 0 var(--outline);
   margin-bottom: 8px;
 }
 .friend-row.muted { opacity: 0.55; box-shadow: none; }
@@ -1894,7 +1898,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   font-size: 13px;
   padding: 7px 11px;
   cursor: pointer;
-  box-shadow: 0 3px 0 var(--outline);
+  box-shadow: 1px 3px 0 var(--outline);
 }
 .mini-btn.good { background: var(--good); color: #05341c; }
 .mini-btn.bad { background: var(--bad-dk); }
@@ -1911,7 +1915,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   border: 5px solid var(--outline);
   border-radius: 18px;
   padding: 16px 20px;
-  box-shadow: 0 8px 0 var(--outline);
+  box-shadow: 2px 8px 0 var(--outline);
   text-align: center;
   animation: bannerIn 0.35s cubic-bezier(0.2, 1.7, 0.4, 1);
 }
@@ -1931,7 +1935,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   border-radius: 999px;
   font-weight: 900;
   letter-spacing: 1px;
-  box-shadow: 0 5px 0 var(--outline);
+  box-shadow: 1px 5px 0 var(--outline);
   animation: popIn 0.25s;
 }
 
@@ -2101,7 +2105,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   font-size: 11px;
   letter-spacing: 0.8px;
   cursor: pointer;
-  box-shadow: 0 3px 0 var(--outline);
+  box-shadow: 1px 3px 0 var(--outline);
 }
 .admin-del:hover { background: var(--bad-dk); }
 .admin-del:disabled { opacity: 0.5; cursor: default; }
@@ -2123,7 +2127,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   background: var(--panel);
   border: 5px solid var(--outline);
   border-radius: 20px;
-  box-shadow: 0 8px 0 var(--outline);
+  box-shadow: 2px 8px 0 var(--outline);
   padding: 20px;
   width: min(92vw, 380px);
   text-align: center;
@@ -2161,7 +2165,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   font-size: 14px;
   letter-spacing: 1.2px;
   cursor: pointer;
-  box-shadow: 0 5px 0 var(--bad-dk), 0 5px 0 3px var(--outline);
+  box-shadow: 1px 5px 0 var(--bad-dk), 0 5px 0 3px var(--outline);
   transition: transform 0.06s, box-shadow 0.06s;
 }
 .confirm-yes:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--bad-dk), 0 1px 0 3px var(--outline); }
@@ -2208,7 +2212,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   font-weight: 900;
   letter-spacing: 0.8px;
   white-space: nowrap;
-  box-shadow: 0 3px 0 var(--outline);
+  box-shadow: 1px 3px 0 var(--outline);
   z-index: 9;
 }
 .seat-known.pop { animation: fxChip 0.45s cubic-bezier(0.2, 1.8, 0.35, 1); }
@@ -2226,7 +2230,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   font-weight: 900;
   letter-spacing: 0.4px;
   white-space: nowrap;
-  box-shadow: 0 3px 0 var(--outline);
+  box-shadow: 1px 3px 0 var(--outline);
   z-index: 10;
   pointer-events: none;
 }
@@ -2252,3 +2256,71 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
 .award-desc { font-size: 11px; font-weight: 800; color: var(--dim); }
 .award-row.got .award-desc { color: #c8b98a; }
 .award-coins { font-size: 12px; font-weight: 900; color: var(--gold); flex: none; }
+
+/* ================= drawn icons ================= */
+
+.ico-svg { display: block; width: 100%; height: 100%; }
+
+.nav-ico {
+  display: block;
+  width: clamp(19px, 5.2vw, 23px);
+  height: clamp(19px, 5.2vw, 23px);
+}
+
+/* The counters read as a number with a unit, so the icon leads and sits tight
+   against it rather than floating a word away. */
+.tb-pill .ico {
+  display: block;
+  width: 16px; height: 16px;
+  flex: none;
+  opacity: 0.92;
+}
+#tbTrophies .ico { color: var(--gold); }
+.tb-pill:last-child .ico { color: var(--gold); }
+
+.peek-eye { display: block; width: 17px; height: 17px; flex: none; }
+
+/* A number with its unit drawn beside it, sized to sit on the text's own baseline
+   rather than floating like an emoji does. */
+.val { display: inline-flex; align-items: center; gap: 4px; }
+.val-num { font-variant-numeric: tabular-nums; }
+.val-ico { display: block; width: 1em; height: 1em; color: var(--gold); flex: none; }
+.val-tail { color: inherit; }
+.board-row.you .val-ico, .chal-btn .val-ico { color: currentColor; }
+
+/* ================= material ================= */
+
+/* A drawn highlight along the top edge. Not a gradient -- a solid line, the way a
+   moulded plastic button catches the light. It is what stops every surface reading
+   as a flat rectangle with a drop shadow. */
+.play-btn, .mode-btn, .nav-btn, .tb-pill, .tb-level-badge,
+.arena-card, .panel, .confirm-box, .auth-box, .seat-info, .mm-box {
+  position: relative;
+}
+/* Buttons only. On a panel it reads as a stray divider above the heading, because a
+   panel has its own internal layout and a button does not. */
+.play-btn::after, .mode-btn::after, .nav-btn::after {
+  content: "";
+  position: absolute;
+  left: 9%; right: 9%;
+  top: 3px;
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.16);
+  pointer-events: none;
+}
+.play-btn::after { background: rgba(255, 255, 255, 0.4); }
+.mode-btn.active::after { background: rgba(255, 255, 255, 0.4); }
+
+/* Not every family shares a radius any more -- buttons are softer than panels,
+   which is the sort of thing a person decides and a template does not. */
+.nav-btn { border-radius: 13px; }
+.mode-btn { border-radius: 15px; }
+.play-btn { border-radius: 20px; }
+.arena-card { border-radius: 18px; }
+
+/* The arena badge is a drawn pennant tinted to that arena, so the ten are told
+   apart by colour rather than by ten unrelated emoji. */
+.arena-card-icon { display: block; width: 20px; height: 20px; flex: none; }
+.arena-emblem { display: grid; place-items: center; width: 22px; height: 22px; }
+.arena-emblem svg { width: 100%; height: 100%; }

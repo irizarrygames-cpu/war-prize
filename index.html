@@ -47,8 +47,8 @@
       <div class="tb-level-badge"><span id="menuLevel">1</span></div>
       <div class="tb-level-bar"><div id="menuLevelFill"></div></div>
     </div>
-    <div class="tb-item tb-pill" id="tbTrophies" title="Leaderboard"><span id="menuTrophies">0</span> <span class="ico">🏆</span></div>
-    <div class="tb-item tb-pill"><span id="menuCoins">0</span> <span class="ico">🪙</span></div>
+    <div class="tb-item tb-pill" id="tbTrophies" title="Leaderboard"><span class="ico" data-icon="trophy"></span><span id="menuTrophies">0</span></div>
+    <div class="tb-item tb-pill"><span class="ico" data-icon="coin"></span><span id="menuCoins">0</span></div>
   </div>
 
   <div id="menuBg" class="scene-host"></div>
@@ -82,14 +82,14 @@
   <button id="playBtn" class="play-btn">PLAY</button>
 
   <div class="menu-nav">
-    <button class="nav-btn" id="navCards"><span>🎴</span>Cards</button>
-    <button class="nav-btn" id="navShop"><span>🛒</span>Shop</button>
-    <button class="nav-btn" id="navProfile"><span>👤</span>Profile</button>
-    <button class="nav-btn" id="navArenas"><span>🏟️</span>Arenas</button>
-    <button class="nav-btn" id="navBoard"><span>📊</span>Ranks</button>
-    <button class="nav-btn" id="navAwards"><span>🏅</span>Awards</button>
-    <button class="nav-btn" id="navFriends"><span>👥</span>Friends<div id="friendDot" class="dot hidden"></div></button>
-    <button class="nav-btn" id="navChallenges"><span>🎯</span>Daily<div id="challengeDot" class="dot hidden"></div></button>
+    <button class="nav-btn" id="navCards"><span class="nav-ico" data-icon="cards"></span>Cards</button>
+    <button class="nav-btn" id="navShop"><span class="nav-ico" data-icon="shop"></span>Shop</button>
+    <button class="nav-btn" id="navProfile"><span class="nav-ico" data-icon="profile"></span>Profile</button>
+    <button class="nav-btn" id="navArenas"><span class="nav-ico" data-icon="arenas"></span>Arenas</button>
+    <button class="nav-btn" id="navBoard"><span class="nav-ico" data-icon="ranks"></span>Ranks</button>
+    <button class="nav-btn" id="navAwards"><span class="nav-ico" data-icon="awards"></span>Awards</button>
+    <button class="nav-btn" id="navFriends"><span class="nav-ico" data-icon="friends"></span>Friends<div id="friendDot" class="dot hidden"></div></button>
+    <button class="nav-btn" id="navChallenges"><span class="nav-ico" data-icon="daily"></span>Daily<div id="challengeDot" class="dot hidden"></div></button>
   </div>
 
   <div class="menu-foot">Play the card you can see, or gamble on the hidden one &middot; matching numbers cancel &middot; highest unique wins</div>
@@ -138,7 +138,7 @@
     <div class="hand-label" id="handLabel">CHOOSE YOUR CARD</div>
     <div id="handCards"></div>
     <button id="peekBtn" class="peek-btn">
-      <span class="peek-eye">👀</span> PEEK
+      <span class="peek-eye" data-icon="eye"></span>PEEK
       <span id="peekCount" class="peek-count">3</span>
     </button>
     <div id="selectBarTrack"><div id="selectBar"></div></div>
@@ -183,7 +183,7 @@
     <div class="hand-label" id="tutHandLabel"></div>
     <div id="tutHandCards"></div>
     <button id="tutPeek" class="peek-btn hidden">
-      <span class="peek-eye">👀</span> PEEK
+      <span class="peek-eye" data-icon="eye"></span>PEEK
       <span id="tutPeekCount" class="peek-count">3</span>
     </button>
   </div>
@@ -253,6 +253,7 @@
 
 <div id="toast" class="hidden"></div>
 
+<script src="icons.js"></script>
 <script src="data.js"></script>
 <script src="scenes.js"></script>
 <script src="audio.js"></script>
