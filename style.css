@@ -2174,3 +2174,57 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
 }
 #askPassWrap .auth-input { margin-top: 14px; }
 .danger-btn { color: var(--bad); border-color: var(--bad-dk); }
+
+/* ================= peek targeting ================= */
+
+/* While a peek is armed, everything you could spend it on lifts and pulses. */
+.peek-target { cursor: pointer; animation: peekPulse 1.1s ease-in-out infinite; }
+@keyframes peekPulse {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-7px); }
+}
+.peek-target .seat-info,
+.peek-target .card-face {
+  box-shadow: 0 0 0 4px #6fd6ff, 0 5px 0 4px var(--outline);
+}
+#matchScreen.peek-arming .seat:not(.peek-target):not([data-seat="0"]) { opacity: 0.45; }
+.peek-btn.arming { background: #6fd6ff; color: #04263a; }
+
+/* What a peek told you about someone, kept on their seat until the next round. */
+.seat-known {
+  position: absolute;
+  top: -12px; left: 50%;
+  transform: translateX(-50%);
+  background: #6fd6ff;
+  color: #04263a;
+  border: 3px solid var(--outline);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  white-space: nowrap;
+  box-shadow: 0 3px 0 var(--outline);
+  z-index: 9;
+}
+.seat-known.pop { animation: fxChip 0.45s cubic-bezier(0.2, 1.8, 0.35, 1); }
+
+/* price tag on each thing a peek could be spent on */
+.peek-price {
+  position: absolute;
+  top: -14px; right: -10px;
+  background: #6fd6ff;
+  color: #04263a;
+  border: 3px solid var(--outline);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  box-shadow: 0 3px 0 var(--outline);
+  z-index: 10;
+  pointer-events: none;
+}
+.peek-price.too-dear { background: var(--panel-2); color: var(--dim); }
+.hand-card { position: relative; }

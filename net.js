@@ -326,7 +326,8 @@ function onlineRound(d) {
   M.phase = 'choose';
   M.prizePot = d.pot;
   M.peeks = d.peeks;
-  M.peekedThisRound = false;
+  M.peekCosts = d.peekCosts || { self: 2, opponent: 1 };
+  M.seen = {};                 // what you paid to see last round is stale now
   M.endsAt = performance.now() + d.msLeft;
 
   const activeLocal = (d.active || []).map(localIndex);
@@ -345,6 +346,8 @@ function onlineRound(d) {
   // only your own visible card is ever sent; the blind one stays unknown client-side
   M.players[0].candidates = [d.known, null];
   $('centerText').textContent = '';
+  document.querySelectorAll('.seat-known').forEach(t => t.remove());
+  setPeekMode(false);
   renderHand();
   if (!d.spectating) startSelectBar();
 }

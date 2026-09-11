@@ -595,6 +595,7 @@ function buildSeats() {
   M.players.forEach((p, i) => {
     const seat = $('seat' + slots[i]);
     seat.classList.toggle('you', p.id === 0);
+    seat.onclick = () => { if (peekMode && i !== 0) spendPeek(i); };
 
     const slot = el('div', 'seat-card-slot');
     slot.appendChild(makeCard(p.cardBack));
@@ -686,6 +687,8 @@ function renderHand() {
     wrap.appendChild(el('div', 'hand-tag' + (known ? ' known' : ''), known ? 'KNOWN' : 'GAMBLE'));
     wrap.onclick = () => {
       if (M.phase !== 'choose' || human.pick !== null) return;
+      // While a peek is armed a tap means "look at this", not "play this".
+      if (peekMode) { if (idx === 1) spendPeek('self'); return; }
       commitPick(human, idx);
     };
     holder.appendChild(wrap);
@@ -695,46 +698,143 @@ function renderHand() {
 function renderPeekButton() {
   const btn = $('peekBtn');
   const left = M ? (M.peeks || 0) : 0;
-  const spent = M && M.peekedThisRound;
   $('peekCount').textContent = left;
-  btn.classList.toggle('spent', !!spent);
-  btn.disabled = !!spent || left < 1 || M.players[0].pick !== null;
+  const locked = !M || M.players[0].pick !== null;
+  const cheapest = Math.min(peekPrice('self'), peekPrice('opponent'));
+  btn.classList.toggle('spent', left < cheapest);
+  btn.disabled = left < cheapest || locked;
   btn.hidden = false;
+  if (locked || left < 1) setPeekMode(false);
 }
 
 // Lifts the corner of the gamble card and slides a hand in to look under it.
-async function usePeek() {
-  if (!M || M.phase !== 'choose' || M.peekedThisRound) return;
-  const btn = $('peekBtn');
-  btn.disabled = true;
+// Pressing PEEK no longer spends one straight away -- it arms a choice. Your blind
+// card and every opponent still in the round light up, and whichever you tap is what
+// the peek buys. That choice is the point: before this, peeking was free of any
+// decision because there was only ever one thing to look at.
+let peekMode = false;
 
-  const res = await api('match/peek');
+function peekPrice(kind) {
+  const c = (M && M.peekCosts) || { self: 2, opponent: 1 };
+  return kind === 'self' ? c.self : c.opponent;
+}
+
+// A little price tag on whatever you could spend the peek on. Without it the two
+// costs are invisible and the choice just looks arbitrary.
+function priceTag(host, cost, affordable) {
+  let tag = host.querySelector('.peek-price');
+  if (!tag) { tag = el('div', 'peek-price'); host.appendChild(tag); }
+  tag.textContent = '👀 ' + cost;
+  tag.classList.toggle('too-dear', !affordable);
+  return tag;
+}
+
+function clearPriceTags() {
+  document.querySelectorAll('.peek-price').forEach(t => t.remove());
+}
+
+function setPeekMode(on) {
+  peekMode = on && !!M && M.phase === 'choose' && M.players[0].pick === null;
+  $('matchScreen').classList.toggle('peek-arming', peekMode);
+  $('peekBtn').classList.toggle('arming', peekMode);
+  $('handLabel').textContent = peekMode
+    ? 'PEEK AT WHAT?'
+    : (M && M.players[0].pick !== null ? 'LOCKED IN' : 'PLAY IT SAFE, OR GAMBLE?');
+
+  clearPriceTags();
+
+  // your own blind card is a target too, and the dearer one
+  const gamble = $('handCards').children[1];
+  if (gamble) {
+    const seen = !!(M && M.seen && M.seen.self);
+    const cost = peekPrice('self');
+    const can = !!M && (M.peeks || 0) >= cost;
+    gamble.classList.toggle('peek-target', peekMode && !seen && can);
+    if (peekMode && !seen) priceTag(gamble, cost, can);
+  }
+
+  M && M.players.forEach((p, i) => {
+    if (i === 0) return;
+    const live = !p.seat.classList.contains('out');
+    const seen = !!(M.seen && M.seen[i]);
+    const cost = peekPrice('opponent');
+    const can = (M.peeks || 0) >= cost;
+    p.seat.classList.toggle('peek-target', peekMode && live && !seen && can);
+    if (peekMode && live && !seen) priceTag(p.seat, cost, can);
+  });
+}
+
+async function spendPeek(target) {
+  if (!M || M.phase !== 'choose') return;
+  setPeekMode(false);
+  clearPriceTags();
+  $('peekBtn').disabled = true;
+
+  const res = await api('match/peek', { target: target === 'self' ? 'self' : M.seatOrder[target] });
   if (!res.ok) { SFX.error(); toast(res.msg || 'No peeks left'); renderPeekButton(); return; }
 
   M.peeks = res.peeks;
-  M.peekedThisRound = true;
-  M.players[0].candidates[1] = res.card;
+  M.seen = M.seen || {};
+  M.seen[target === 'self' ? 'self' : target] = res.card;
+  if (target === 'self') M.players[0].candidates[1] = res.card;
 
-  const wrap = $('handCards').children[1];
-  if (wrap) {
-    const card = wrap.querySelector('.card');
-    card.querySelector('.card-num').textContent = res.card;
-    const hand = el('div', 'peek-hand', '🤏');
-    wrap.appendChild(hand);
-    wrap.classList.add('peeking');
-    SFX.peek();
-    setTimeout(() => hand.remove(), 1100);
-    wrap.querySelector('.hand-tag').textContent = 'SEEN';
-    wrap.querySelector('.hand-tag').classList.add('known');
-
-    const c = FX.centreOf(card);
-    FX.ring(c.x, c.y, { size: 150, color: '#6fd6ff', life: 460, thick: 6 });
-    setTimeout(() => {
-      FX.floatText(c.x, c.y - 60, String(res.card), 'cool');
-      SFX.peekReveal(res.card);
-    }, 240);
-  }
+  if (target === 'self') showSelfPeek(res.card);
+  else showOpponentPeek(target, res.card);
   renderPeekButton();
+}
+
+function showSelfPeek(card) {
+  const wrap = $('handCards').children[1];
+  if (!wrap) return;
+  const cardEl = wrap.querySelector('.card');
+  cardEl.querySelector('.card-num').textContent = card;
+  const hand = el('div', 'peek-hand', '🤏');
+  wrap.appendChild(hand);
+  wrap.classList.add('peeking');
+  SFX.peek();
+  setTimeout(() => hand.remove(), 1100);
+  wrap.querySelector('.hand-tag').textContent = 'SEEN';
+  wrap.querySelector('.hand-tag').classList.add('known');
+
+  const c = FX.centreOf(cardEl);
+  FX.ring(c.x, c.y, { size: 150, color: '#6fd6ff', life: 460, thick: 6 });
+  setTimeout(() => {
+    FX.floatText(c.x, c.y - 60, String(card), 'cool');
+    SFX.peekReveal(card);
+  }, 240);
+}
+
+// What you learned about them stays on their seat for the rest of the round, because
+// remembering four numbers in your head is not the skill this is testing.
+function showOpponentPeek(localIndex, card) {
+  const p = M.players[localIndex];
+  if (!p) return;
+  SFX.peek();
+
+  let tag = p.seat.querySelector('.seat-known');
+  if (!tag) {
+    tag = el('div', 'seat-known');
+    p.seat.appendChild(tag);
+  }
+  tag.textContent = 'SEES ' + card;
+  tag.classList.remove('pop');
+  void tag.offsetWidth;
+  tag.classList.add('pop');
+
+  const c = FX.centreOf(p.seat.querySelector('.seat-info'));
+  FX.ring(c.x, c.y, { size: 150, color: '#6fd6ff', life: 460, thick: 6 });
+  setTimeout(() => {
+    FX.floatText(c.x, c.y - 44, String(card), 'cool');
+    SFX.peekReveal(card);
+  }, 240);
+}
+
+function usePeek() {
+  if (!M || M.phase !== 'choose' || M.players[0].pick !== null) return;
+  const cheapest = Math.min(peekPrice('self'), peekPrice('opponent'));
+  if ((M.peeks || 0) < cheapest) { SFX.error(); toast('No peeks left'); return; }
+  SFX.click();
+  setPeekMode(!peekMode);
 }
 
 $('peekBtn').onclick = usePeek;
