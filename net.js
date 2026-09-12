@@ -342,6 +342,21 @@ function renderQueue(d) {
 /* ---------------- online match ---------------- */
 
 function startOnlineMatch(info) {
+  // On reconnect the server answers /api/sync with the live match AND still has the
+  // original match-start queued, so this runs twice for one match: the table was
+  // rebuilt, the seats re-dealt and the found-a-match sting played a second time
+  // mid-round. The second one only needs to correct the scores.
+  if (M && M.online && M.running && info.matchId && M.matchId === info.matchId) {
+    if (info.scores) {
+      info.scores.forEach((sc, si) => {
+        const p = M.players[localIndex(si)];
+        if (p) { p.score = sc; p.seat.querySelector('.seat-score').textContent = sc; }
+      });
+      updateScoreboard();
+    }
+    return;
+  }
+
   closePanel();
   dismissInvite();
   clearInterval(queueTimer);
@@ -353,6 +368,7 @@ function startOnlineMatch(info) {
 
   M = {
     online: true,
+    matchId: info.matchId || null,
     serverIndex: info.you,
     seatOrder: order,
     mode: info.mode,

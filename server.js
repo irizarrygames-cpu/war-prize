@@ -14,7 +14,7 @@ const { screenUsername } = require('./moderation');
 
 const PORT = Number(process.argv[2] || process.env.PORT || 8421);
 // Bumped whenever something worth verifying from outside ships. /api/health reports it.
-const BUILD = 17;
+const BUILD = 18;
 const ROOT = __dirname;
 const DATA_FILE = path.join(ROOT, 'data.json');
 
@@ -229,6 +229,73 @@ async function flushDB() {
   }
 }
 
+/* ---------------- save sanity ----------------
+   Progress is kept on the client and posted back here, which is fine for a game
+   where the only thing at stake is your own profile. The leaderboard is the
+   exception: it reads trophies straight out of this, so "trophies: 999999" in a
+   POST body put anyone at number one for ever. Two guards, neither of which gets
+   in an honest player's way:
+
+     - the shape has to be a plain object under a sane size
+     - trophies can only climb by so much between saves. A perfect match is worth
+       30, so the ceiling below is many matches' worth of headroom for a client
+       that lost a few saves in a row -- but reaching a fake top score would take
+       thousands of requests, and the rate limit is waiting for that.
+
+   Nothing here rejects a save outright. A refused number is clamped, so a player
+   whose clock or connection did something strange still keeps playing. */
+
+const SAVE_MAX_BYTES = 20000;
+// 33 perfect matches' worth. Far more than the handful a flaky connection could
+// stack up between two successful saves, and still slow enough that forging a top
+// score means thousands of requests -- which is what the rate limit is for.
+const TROPHY_GAIN_PER_SAVE = 1000;
+const LIMITS = {
+  trophies:        { min: 0, max: 1000000 },
+  highestTrophies: { min: 0, max: 1000000 },
+  level:           { min: 1, max: 999 },
+  coins:           { min: 0, max: 10000000 },
+  xp:              { min: 0, max: 100000000 },
+  matches:         { min: 0, max: 1000000 },
+  wins:            { min: 0, max: 1000000 },
+  prizeCards:      { min: 0, max: 100000000 },
+  streak:          { min: 0, max: 100000 },
+  bestStreak:      { min: 0, max: 100000 },
+};
+
+function clampNumber(v, lim, fallback) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(lim.max, Math.max(lim.min, Math.floor(n)));
+}
+
+function sanitizeSave(incoming, previous) {
+  // Keep what is already stored rather than returning null: a client that posts
+  // something that is not a save -- null while it is still loading, say -- must not
+  // be able to wipe its own progress by asking badly.
+  if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) return previous || null;
+
+  let text;
+  try { text = JSON.stringify(incoming); } catch (e) { return previous || null; }
+  if (!text || text.length > SAVE_MAX_BYTES) return previous || null;
+
+  const save = JSON.parse(text);      // a copy, so the caller can't mutate it later
+  const prev = (previous && typeof previous === 'object') ? previous : {};
+
+  for (const [key, lim] of Object.entries(LIMITS)) {
+    if (!Object.prototype.hasOwnProperty.call(save, key)) continue;
+    save[key] = clampNumber(save[key], lim, clampNumber(prev[key], lim, lim.min));
+  }
+
+  // The one number anyone would bother forging.
+  const was = clampNumber(prev.trophies, LIMITS.trophies, 0);
+  if (save.trophies > was + TROPHY_GAIN_PER_SAVE) save.trophies = was + TROPHY_GAIN_PER_SAVE;
+  if (typeof save.highestTrophies === 'number') {
+    save.highestTrophies = Math.max(save.trophies, Math.min(save.highestTrophies, was + TROPHY_GAIN_PER_SAVE));
+  }
+  return save;
+}
+
 // user record: { name, hash, salt, iterations, created, save, friends[], incoming[], outgoing[] }
 function getUser(id) { return DB.users[id]; }
 
@@ -327,7 +394,17 @@ function hashPassword(password, salt, iterations) {
   });
 }
 
-function normalizeId(name) { return String(name || '').trim().toLowerCase(); }
+// String() throws on an object whose toString has been nulled out -- {"toString":null}
+// in a JSON body was enough to take the server down. Anything that will not convert
+// cleanly is simply not a name, a mode or a token, so it becomes the empty string.
+function str(v) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  return '';
+}
+
+function normalizeId(name) { return str(name).trim().toLowerCase(); }
 
 // Deliberately NOT checking whether a password is already in use by someone else.
 // Telling a stranger "that password is taken" hands them a working password, and
@@ -362,7 +439,7 @@ function validateNewPassword(username, password) {
   return null;
 }
 
-function userIdFromToken(token) { return tokens.get(String(token || '')); }
+function userIdFromToken(token) { return tokens.get(str(token)); }
 
 // Sessions used to live only in memory, so every restart signed everybody out --
 // and on a free host that is every deploy and every wake from idle. Worse, the
@@ -503,7 +580,7 @@ function findWinner(entries) {
 }
 
 function startMatch(humanIds, modeKey, friendly) {
-  const mode = MODES[modeKey] || MODES.party;
+  const mode = isMode(modeKey) ? MODES[modeKey] : MODES.party;
   const id = crypto.randomBytes(8).toString('hex');
 
   // Bot skill tracks the arena the real players are climbing in.
@@ -603,11 +680,14 @@ function beginRound(m) {
     if (!p.bot) return;
     // Bots spend peeks too -- otherwise never seeing one would give them away.
     // Worth more when a stacked pot is on the line, so they lean on them then.
-    const wantsPeek = p.peeks > 0 && Math.random() < (m.pot > 1 ? 0.45 : 0.18);
+    // A bot that peeks then takes the better card outright, which is exactly what a
+    // player's SELF peek buys -- so it has to cost the same. Charging it 1 when a
+    // player pays 2 gave every bot three looks at its own blind card to a player's one.
+    const wantsPeek = p.peeks >= SELF_PEEK_COST && Math.random() < (m.pot > 1 ? 0.45 : 0.18);
     if (wantsPeek) {
       later(m, () => {
-        if (m.phase !== 'choose' || p.pick !== null || p.peeks < 1) return;
-        p.peeks--;
+        if (m.phase !== 'choose' || p.pick !== null || p.peeks < SELF_PEEK_COST) return;
+        p.peeks -= SELF_PEEK_COST;
         p.peeked = true;
         m.players.forEach(x => { if (x.id) push(x.id, 'peeked', { seat: i }); });
       }, randInt(300, 700));
@@ -794,6 +874,7 @@ function leaveQueue(id) {
 }
 
 function broadcastQueue(key) {
+  if (!isMode(key)) return;
   const need = MODES[key].players;
   queues[key].forEach(e => push(e.id, 'queue', {
     mode: key, waiting: queues[key].length, need,
@@ -801,8 +882,12 @@ function broadcastQueue(key) {
   }));
 }
 
+function isMode(key) { return Object.prototype.hasOwnProperty.call(MODES, key); }
+
 function joinQueue(id, key) {
-  if (!MODES[key]) return { ok: false, msg: 'Unknown mode' };
+  // Not `if (!MODES[key])`: every key on Object.prototype answers that truthily, so
+  // mode "constructor" walked straight past it and crashed on queues[key].push.
+  if (!isMode(key)) return { ok: false, msg: 'Unknown mode' };
   if (matchOf(id)) return { ok: false, msg: 'You are already in a match' };
   leaveQueue(id);
 
@@ -817,6 +902,7 @@ function joinQueue(id, key) {
 
 // Pull players off the queue and start. With `fillBots`, go even if short-handed.
 function launch(key, fillBots) {
+  if (!isMode(key)) return;
   const need = MODES[key].players;
   const q = queues[key];
   if (!q.length) return;
@@ -888,7 +974,11 @@ const MIME = {
 };
 
 function serveStatic(req, res, urlPath) {
-  const rel = decodeURIComponent(urlPath === '/' ? '/index.html' : urlPath);
+  // decodeURIComponent throws URIError on a stray "%", and this used to run outside
+  // any handler -- so "GET /%" took the whole server down with it.
+  let rel;
+  try { rel = decodeURIComponent(urlPath === '/' ? '/index.html' : urlPath); }
+  catch (e) { res.writeHead(400).end('Bad request'); return; }
 
   // Never serve dotfiles or dot-directories. Without this, running `git init` here
   // would publish .git/config to anyone who asked for it.
@@ -937,8 +1027,20 @@ setInterval(() => {
 
 /* ---------------- routes ---------------- */
 
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://localhost');
+// Every request goes through here inside a try/catch. An unhandled throw in an async
+// handler becomes an unhandled rejection, and Node kills the process for those -- so
+// before this, a single request for "/%" disconnected every player in the game.
+const server = http.createServer((req, res) => {
+  handleRequest(req, res).catch(err => {
+    console.error('request failed:', req.method, req.url, '-', err && err.message);
+    try { sendJSON(res, 500, { ok: false, msg: 'Something went wrong' }); } catch (e) {}
+  });
+});
+
+async function handleRequest(req, res) {
+  let url;
+  try { url = new URL(req.url, 'http://localhost'); }
+  catch (e) { return sendJSON(res, 400, { ok: false, msg: 'Bad request' }); }
   const route = url.pathname;
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
 
@@ -949,6 +1051,10 @@ const server = http.createServer(async (req, res) => {
   let body;
   try { body = await readBody(req); }
   catch (e) { return sendJSON(res, 400, { ok: false, msg: 'Bad request' }); }
+  // A JSON body is legally any value -- 5, null, "hi", []. Reading .token off those
+  // either throws or quietly misbehaves, so anything that is not a plain object is
+  // treated as an empty one.
+  if (!body || typeof body !== 'object' || Array.isArray(body)) body = {};
 
   // Public, and deliberately side-effect free. Checking whether a deploy has landed
   // by trying to sign up a test name creates the account when the check fails, which
@@ -984,7 +1090,7 @@ const server = http.createServer(async (req, res) => {
       const hash = await hashPassword(body.password, salt, PBKDF2_ITERATIONS);
       DB.users[id] = {
         name: id.toUpperCase(), hash, salt, iterations: PBKDF2_ITERATIONS,
-        created: Date.now(), save: body.save || null, friends: [], incoming: [], outgoing: [],
+        created: Date.now(), save: sanitizeSave(body.save, null), friends: [], incoming: [], outgoing: [],
       };
       saveDB();
       const token = issueToken(id);
@@ -994,7 +1100,7 @@ const server = http.createServer(async (req, res) => {
     const u = getUser(id);
     if (!u) return sendJSON(res, 200, { ok: false, msg: 'No account with that username' });
     // Cheap guard so nobody can make us PBKDF2 a 200KB string 20 times a minute.
-    if (String(body.password || '').length > 200) return sendJSON(res, 200, { ok: false, msg: 'Wrong password' });
+    if (str(body.password).length > 200) return sendJSON(res, 200, { ok: false, msg: 'Wrong password' });
     const attempt = await hashPassword(body.password, u.salt, u.iterations);
     if (attempt !== u.hash) return sendJSON(res, 200, { ok: false, msg: 'Wrong password' });
     return sendJSON(res, 200, { ok: true, token: issueToken(id), name: u.name, save: u.save });
@@ -1070,7 +1176,7 @@ const server = http.createServer(async (req, res) => {
     // tap can't wipe somebody's progress.
     const mine = getUser(me);
     if (!mine) return sendJSON(res, 200, { ok: false, msg: 'No such account' });
-    const attempt = await hashPassword(String(body.password || ''), mine.salt, mine.iterations);
+    const attempt = await hashPassword(str(body.password), mine.salt, mine.iterations);
     if (attempt !== mine.hash) return sendJSON(res, 200, { ok: false, msg: 'Wrong password' });
     await removeAccount(me);
     return sendJSON(res, 200, { ok: true });
@@ -1110,13 +1216,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (route === '/api/save') {
-    meUser.save = body.save || null;
+    if (throttled(ip, 'save', 60, 60000)) return sendJSON(res, 429, { ok: false, msg: 'Slow down' });
+    meUser.save = sanitizeSave(body.save, meUser.save);
     saveDB();
-    return sendJSON(res, 200, { ok: true });
+    return sendJSON(res, 200, { ok: true, save: meUser.save });
   }
 
   if (route === '/api/logout') {
-    forgetSession(String(body.token));
+    forgetSession(str(body.token));
     return sendJSON(res, 200, { ok: true });
   }
 
@@ -1196,10 +1303,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (route === '/api/invite/respond') {
-    const inv = invites.get(String(body.inviteId));
+    const inv = invites.get(str(body.inviteId));
     if (!inv || inv.to !== me) return sendJSON(res, 200, { ok: false, msg: 'That invite expired' });
     clearTimeout(inv.timer);
-    invites.delete(String(body.inviteId));
+    invites.delete(str(body.inviteId));
 
     if (!body.accept) {
       push(inv.from, 'invite-declined', { by: meUser.name });
@@ -1214,7 +1321,7 @@ const server = http.createServer(async (req, res) => {
 
   // ---- queue ----
   if (route === '/api/queue/join') {
-    return sendJSON(res, 200, joinQueue(me, String(body.mode || 'party')));
+    return sendJSON(res, 200, joinQueue(me, str(body.mode) || 'party'));
   }
 
   if (route === '/api/queue/leave') {
@@ -1290,12 +1397,12 @@ const server = http.createServer(async (req, res) => {
     const idx = m.players.findIndex(p => p.id === me);
     if (idx < 0) return sendJSON(res, 200, { ok: false, msg: 'Not in this match' });
     // Only the game's own emoji, so this can't be turned into a chat box.
-    if (!REACTION_EMOJI.has(String(body.emoji))) {
+    if (!REACTION_EMOJI.has(str(body.emoji))) {
       return sendJSON(res, 200, { ok: false, msg: 'Unknown reaction' });
     }
     if (spamming(me)) return sendJSON(res, 200, { ok: false, msg: 'Slow down' });
     m.players.forEach(x => {
-      if (x.id && x.id !== me) push(x.id, 'reaction', { seat: idx, emoji: String(body.emoji) });
+      if (x.id && x.id !== me) push(x.id, 'reaction', { seat: idx, emoji: str(body.emoji) });
     });
     return sendJSON(res, 200, { ok: true });
   }
@@ -1307,7 +1414,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   return sendJSON(res, 404, { ok: false, msg: 'Unknown endpoint' });
-});
+}
 
 // Reap players who stopped polling, so their opponent isn't left playing a ghost.
 setInterval(() => {
@@ -1328,6 +1435,16 @@ setInterval(() => {
     notifyFriendsOfPresence(id);
   }
 }, 10000).unref();
+
+// Last resort. Everything above is meant to catch its own problems, but a game
+// server that exits because one timer threw takes every match down with it. Log it
+// and keep running: a wrong answer to one request beats no answer to all of them.
+process.on('unhandledRejection', err => {
+  console.error('unhandled rejection:', (err && err.stack) || err);
+});
+process.on('uncaughtException', err => {
+  console.error('uncaught exception:', (err && err.stack) || err);
+});
 
 // A redeploy or an idle restart sends SIGTERM; write out anything still pending
 // rather than losing the last quarter-second of play.

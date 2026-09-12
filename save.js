@@ -73,7 +73,20 @@ let pushTimer = null;
 function persist() {
   if (!AUTH_TOKEN || !SAVE) return;
   clearTimeout(pushTimer);                    // progression changes in bursts; batch them
-  pushTimer = setTimeout(() => api('save', { save: SAVE }), 400);
+  pushTimer = setTimeout(async () => {
+    const sent = SAVE.trophies;
+    const res = await api('save', { save: SAVE });
+    // The server refuses trophy jumps it considers impossible and clamps them. Take
+    // its number rather than keep our own, or the two copies drift and every later
+    // save is measured against a figure the server never accepted. Skipped if the
+    // score moved again while the request was out -- that one is newer than both.
+    if (res && res.ok && res.save && SAVE && SAVE.trophies === sent
+        && typeof res.save.trophies === 'number' && res.save.trophies < sent) {
+      SAVE.trophies = res.save.trophies;
+      SAVE.highestTrophies = Math.max(SAVE.trophies, res.save.highestTrophies || 0);
+      if (typeof renderMenu === 'function') renderMenu();
+    }
+  }, 400);
 }
 
 function storeToken(t) {
