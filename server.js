@@ -14,7 +14,7 @@ const { screenUsername } = require('./moderation');
 
 const PORT = Number(process.argv[2] || process.env.PORT || 8421);
 // Bumped whenever something worth verifying from outside ships. /api/health reports it.
-const BUILD = 19;
+const BUILD = 20;
 const ROOT = __dirname;
 const DATA_FILE = path.join(ROOT, 'data.json');
 
@@ -982,7 +982,15 @@ function serveStatic(req, res, urlPath) {
 
   // Never serve dotfiles or dot-directories. Without this, running `git init` here
   // would publish .git/config to anyone who asked for it.
-  if (rel.split('/').some(seg => seg.startsWith('.') && seg !== '')) {
+  //
+  // /.well-known/ is the one exception, and it has to be: it is where the web keeps
+  // the files that prove who owns a domain. An Android wrapper around this game reads
+  // /.well-known/assetlinks.json to check the app and the site are the same people --
+  // without it the game runs inside a browser address bar instead of full screen.
+  // Only that one directory opens, and only for files directly inside it.
+  const segs = rel.split('/').filter(Boolean);
+  const wellKnown = segs.length === 2 && segs[0] === '.well-known' && !segs[1].startsWith('.');
+  if (!wellKnown && segs.some(seg => seg.startsWith('.'))) {
     res.writeHead(403).end('Forbidden');
     return;
   }
