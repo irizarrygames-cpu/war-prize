@@ -97,10 +97,13 @@
 
 <!-- ============ MATCHMAKING ============ -->
 <div id="mmScreen" class="screen hidden">
+  <div id="mmBg" class="scene-host"></div>
   <div class="mm-box">
     <div class="mm-title" id="mmTitle">FINDING PLAYERS</div>
+    <div class="mm-sub" id="mmSub"></div>
     <div id="mmSlots" class="mm-slots"></div>
-    <div id="mmStatus" class="mm-status">Searching…</div>
+    <div id="mmTrack" class="mm-track"><div id="mmBar" class="mm-bar"></div></div>
+    <div id="mmStatus" class="mm-status">Searching</div>
     <button id="mmCancel" class="ghost-btn">Cancel</button>
   </div>
 </div>
@@ -202,12 +205,13 @@
   <div id="resultBg" class="scene-host"></div>
   <div id="victoryFx"></div>
   <div class="result-box">
+    <div id="resultCrest" class="result-crest"><span id="resultCrestMark"></span></div>
     <div id="resultTitle">VICTORY!</div>
     <div id="resultScores" class="result-scores"></div>
     <div class="result-rewards" id="resultRewards">
-      <div class="reward" id="rewardTrophy"><span class="r-val">+30</span><span class="r-ico">🏆</span></div>
-      <div class="reward" id="rewardXp"><span class="r-val">+110</span><span class="r-ico">XP</span></div>
-      <div class="reward" id="rewardCoins"><span class="r-val">+25</span><span class="r-ico">🪙</span></div>
+      <div class="reward" id="rewardTrophy"><span class="r-val">+30</span><span class="r-ico" data-icon="trophy"></span></div>
+      <div class="reward" id="rewardXp"><span class="r-val">+110</span><span class="r-ico r-xp">XP</span></div>
+      <div class="reward" id="rewardCoins"><span class="r-val">+25</span><span class="r-ico" data-icon="coin"></span></div>
     </div>
     <div id="resultExtras" class="result-extras"></div>
     <button id="playAgainBtn" class="play-btn">PLAY AGAIN</button>

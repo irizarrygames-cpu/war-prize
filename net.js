@@ -246,8 +246,6 @@ function dismissInvite(inviteId) {
   });
 }
 
-/* ---------------- online match ---------------- */
-
 /* ---------------- queue ---------------- */
 
 let queueTimer = null;
@@ -256,7 +254,14 @@ function joinQueue() {
   SFX.unlock();
   show('mmScreen');
   const m = modeOf(SAVE.mode);
+  const arena = arenaFor(SAVE.trophies);
+  // The lobby used to be a box floating on the flat page colour -- the one screen in
+  // the game with no world behind it. It now sits in the arena you are queuing for.
+  paintScene($('mmBg'), arena.n);
   $('mmTitle').textContent = 'FINDING PLAYERS';
+  $('mmTitle').classList.remove('found');
+  $('mmSub').textContent = m.label + ' · ' + arena.name.toUpperCase();
+  mmShown = { waiting: 0, need: 0 };
   renderQueue({ waiting: 1, need: m.players, msLeft: 30000 });
   armQueueWatchdog();
   api('queue/join', { mode: SAVE.mode }).then(r => {
@@ -274,25 +279,59 @@ function leaveQueueUi() {
 }
 
 // Counts down to the match starting. Never says how the empty seats get filled.
+//
+// The slot row is only rebuilt when the count actually changes. Poll events keep
+// arriving while you wait, and rebuilding on every one of them restarted the pop
+// animation on seats that had been filled for ten seconds -- the row looked like it
+// was flickering rather than filling up.
+let mmShown = { waiting: 0, need: 0 };
+const MM_WAIT_MS = 30000;
+
 function renderQueue(d) {
   const need = d.need || modeOf(SAVE.mode).players;
   const waiting = d.waiting || 1;
-  const slots = $('mmSlots');
-  slots.innerHTML = '';
-  for (let i = 0; i < need; i++) {
-    const cell = el('div', 'mm-slot' + (i < waiting ? ' filled' : ''));
-    cell.appendChild(el('div', 'avatar', i === 0 ? SAVE.avatar : (i < waiting ? '🎮' : '?')));
-    cell.appendChild(el('div', 'mm-name', i === 0 ? SAVE.name : (i < waiting ? 'Player' : 'Searching…')));
-    slots.appendChild(cell);
+  const full = waiting >= need;
+
+  if (mmShown.waiting !== waiting || mmShown.need !== need) {
+    const wasFilled = mmShown.waiting;
+    mmShown = { waiting, need };
+    const slots = $('mmSlots');
+    slots.innerHTML = '';
+    for (let i = 0; i < need; i++) {
+      const filled = i < waiting;
+      // Only seats that arrived since the last render pop in. The rest just sit there.
+      const cell = el('div', 'mm-slot' + (filled ? ' filled' : '') + (filled && i >= wasFilled ? ' arriving' : ''));
+      cell.style.setProperty('--i', i - wasFilled);
+
+      const av = el('div', 'mm-av');
+      if (i === 0) av.textContent = SAVE.avatar;
+      else if (filled) av.innerHTML = icon('profile');
+      else { av.className = 'mm-av hunting'; av.innerHTML = '<i></i><i></i><i></i>'; }
+      cell.appendChild(av);
+
+      cell.appendChild(el('div', 'mm-name', i === 0 ? SAVE.name : (filled ? 'Player' : 'Open seat')));
+      slots.appendChild(cell);
+    }
+    if (wasFilled && waiting > wasFilled) SFX.cardLand();
   }
 
+  $('mmTitle').textContent = full ? 'MATCH FOUND' : 'FINDING PLAYERS';
+  $('mmTitle').classList.toggle('found', full);
+  $('mmTrack').classList.toggle('spent', full);
+  // Nothing left to cancel once the table is full -- the server starts it immediately.
+  $('mmCancel').classList.toggle('hidden', full);
+
   clearInterval(queueTimer);
-  let msLeft = d.msLeft != null ? d.msLeft : 30000;
+  let msLeft = d.msLeft != null ? d.msLeft : MM_WAIT_MS;
   const tick = () => {
     const secs = Math.max(0, Math.ceil(msLeft / 1000));
-    $('mmStatus').textContent = waiting >= need
-      ? 'Match found!'
-      : `${waiting} of ${need} players · starting in ${secs}s`;
+    $('mmStatus').textContent = full
+      ? 'Dealing the first round'
+      : waiting + ' of ' + need + ' players · starting in ' + secs + 's';
+    // Drains left to right, so the wait has a shape instead of only a shrinking number.
+    const pct = full ? 100 : Math.max(0, Math.min(100, (msLeft / MM_WAIT_MS) * 100));
+    $('mmBar').style.width = pct + '%';
+    $('mmBar').classList.toggle('urgent', !full && msLeft < 6000);
     msLeft -= 250;
     if (msLeft < -2000) clearInterval(queueTimer);
   };
@@ -356,6 +395,7 @@ function startOnlineMatch(info) {
   $('suddenDeath').classList.add('hidden');
   $('matchTimer').classList.remove('urgent');
   $('prizeCount').classList.add('hidden');
+  renderPrizePile(1);
 
   buildSeats();
   buildReactionBar();
@@ -398,6 +438,7 @@ function onlineRound(d) {
   M.round = d.round;
   M.phase = 'choose';
   M.prizePot = d.pot;
+  renderPrizePile(d.pot);
   M.peeks = d.peeks;
   M.peekCosts = d.peekCosts || { self: 2, opponent: 1 };
   M.seen = {};                 // what you paid to see last round is stale now
@@ -576,19 +617,30 @@ function onlineMatchEnd(d) {
     mode: d.mode,
   });
 
-  $('resultTitle').textContent = d.place === 0
+  // A won match and a lost one used to differ only in the colour of one word. The
+  // crest gives the screen something to land on before you read anything.
+  const won = d.place === 0;
+  const crest = $('resultCrest');
+  crest.className = 'result-crest place-' + (d.place + 1) + (won ? ' win' : '');
+  $('resultCrestMark').innerHTML = won ? icon('trophy') : String(d.place + 1);
+
+  $('resultTitle').textContent = won
     ? 'VICTORY!'
     : ['', '2ND PLACE', '3RD PLACE', '4TH PLACE'][d.place];
-  $('resultTitle').className = d.place === 0 ? 'win' : 'lose';
+  $('resultTitle').className = won ? 'win' : 'lose';
 
   const sc = $('resultScores');
   sc.innerHTML = '';
   d.standings.forEach((r, i) => {
     const mine = localIndex(r.seat) === 0;
     const row = el('div', 'res-row' + (mine ? ' you' : ''));
-    row.appendChild(el('span', 'res-place', '#' + (i + 1)));
-    row.appendChild(el('span', 'sb-av', mine ? SAVE.avatar : (r.avatar || '🎮')));
+    row.style.setProperty('--i', i);   // the table fills in top to bottom, not all at once
+    row.appendChild(el('span', 'res-place', String(i + 1)));
+    const av = el('span', 'sb-av', mine ? SAVE.avatar : (r.avatar || ''));
+    if (!mine && !r.avatar) av.innerHTML = icon('profile');
+    row.appendChild(av);
     row.appendChild(el('span', 'sb-name', r.name));
+    if (mine) row.appendChild(el('span', 'res-you', 'YOU'));
     row.appendChild(el('span', 'sb-score', String(r.score)));
     sc.appendChild(row);
   });

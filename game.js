@@ -696,6 +696,28 @@ function buildSeats() {
   });
 }
 
+// The pot is what a whole round is fought over, and it was one flat rectangle that
+// said "PRIZE" whatever it was worth -- a badge reading "x3" was the only clue. It
+// is a real stack now, and it grows, so you can see what is on the table without
+// reading anything.
+const PRIZE_STACK_MAX = 4;
+
+function renderPrizePile(pot) {
+  const pile = $('prizePile');
+  if (!pile) return;
+  const count = $('prizeCount');
+  const depth = Math.max(1, Math.min(PRIZE_STACK_MAX, pot || 1));
+
+  pile.querySelectorAll('.prize-card').forEach(c => c.remove());
+  for (let i = depth - 1; i >= 0; i--) {          // deepest card first
+    const c = el('div', 'prize-card' + (i ? ' under' : ' top'));
+    c.style.setProperty('--i', i);
+    if (!i) c.appendChild(el('span', null, 'PRIZE'));
+    pile.insertBefore(c, count);
+  }
+  pile.classList.toggle('stacked', depth > 1);
+}
+
 function makeCard(backId, value) {
   const card = el('div', 'card');
   const inner = el('div', 'card-inner');
@@ -1000,6 +1022,7 @@ function paintResolution(players, winner, gained, potAfter) {
     }
 
     grabPrize(winner, gained);
+    later(() => renderPrizePile(1), REACH_MS + CLOSE_MS + CARRY_MS);
     later(() => {                                   // lands as the hand pulls it home
       winner.seat.querySelector('.seat-score').textContent = winner.score;
       updateScoreboard();
@@ -1020,6 +1043,7 @@ function paintResolution(players, winner, gained, potAfter) {
     pc.classList.remove('hidden', 'bump');
     void pc.offsetWidth;
     pc.classList.add('bump');
+    renderPrizePile(potAfter);
     const pr = FX.centreOf($('prizePile'));
     sparkBurst(pr.x, pr.y, 10, '#ff4d6d');
     FX.ring(pr.x, pr.y, { size: 200, color: '#ff4d6d', life: 480, thick: 7 });
