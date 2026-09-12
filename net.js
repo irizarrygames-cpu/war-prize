@@ -456,7 +456,7 @@ function onlineRound(d) {
   M.prizePot = d.pot;
   renderPrizePile(d.pot);
   M.peeks = d.peeks;
-  M.peekCosts = d.peekCosts || { self: 2, opponent: 1 };
+  M.peekCosts = d.peekCosts || { self: 1, opponent: 1 };
   M.seen = {};                 // what you paid to see last round is stale now
   M.endsAt = performance.now() + d.msLeft;
 

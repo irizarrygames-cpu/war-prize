@@ -810,38 +810,19 @@ function renderPeekButton() {
   const left = M ? (M.peeks || 0) : 0;
   $('peekCount').textContent = left;
   const locked = !M || M.players[0].pick !== null;
-  const cheapest = Math.min(peekPrice('self'), peekPrice('opponent'));
-  btn.classList.toggle('spent', left < cheapest);
-  btn.disabled = left < cheapest || locked;
+  btn.classList.toggle('spent', left < 1);
+  btn.disabled = left < 1 || locked;
   btn.hidden = false;
   if (locked || left < 1) setPeekMode(false);
 }
 
 // Lifts the corner of the gamble card and slides a hand in to look under it.
-// Pressing PEEK no longer spends one straight away -- it arms a choice. Your blind
-// card and every opponent still in the round light up, and whichever you tap is what
-// the peek buys. That choice is the point: before this, peeking was free of any
-// decision because there was only ever one thing to look at.
+// Pressing PEEK arms a choice rather than spending one straight away: your blind card
+// and every opponent still in the round light up, and whichever you tap is what the
+// peek buys. Every one of them costs the same single charge, and you get three fresh
+// charges at the top of every round -- so there is no price to display and nothing to
+// ration. Look at whatever you want to look at.
 let peekMode = false;
-
-function peekPrice(kind) {
-  const c = (M && M.peekCosts) || { self: 2, opponent: 1 };
-  return kind === 'self' ? c.self : c.opponent;
-}
-
-// A little price tag on whatever you could spend the peek on. Without it the two
-// costs are invisible and the choice just looks arbitrary.
-function priceTag(host, cost, affordable) {
-  let tag = host.querySelector('.peek-price');
-  if (!tag) { tag = el('div', 'peek-price'); host.appendChild(tag); }
-  tag.textContent = '👀 ' + cost;
-  tag.classList.toggle('too-dear', !affordable);
-  return tag;
-}
-
-function clearPriceTags() {
-  document.querySelectorAll('.peek-price').forEach(t => t.remove());
-}
 
 function setPeekMode(on) {
   peekMode = on && !!M && M.phase === 'choose' && M.players[0].pick === null;
@@ -851,37 +832,30 @@ function setPeekMode(on) {
     ? 'PEEK AT WHAT?'
     : (M && M.players[0].pick !== null ? 'LOCKED IN' : 'PLAY IT SAFE, OR GAMBLE?');
 
-  clearPriceTags();
+  const can = !!M && (M.peeks || 0) >= 1;
 
-  // your own blind card is a target too, and the dearer one
+  // your own blind card is a target too
   const gamble = $('handCards').children[1];
   if (gamble) {
     const seen = !!(M && M.seen && M.seen.self);
-    const cost = peekPrice('self');
-    const can = !!M && (M.peeks || 0) >= cost;
     gamble.classList.toggle('peek-target', peekMode && !seen && can);
-    if (peekMode && !seen) priceTag(gamble, cost, can);
   }
 
   M && M.players.forEach((p, i) => {
     if (i === 0) return;
     const live = !p.seat.classList.contains('out');
     const seen = !!(M.seen && M.seen[i]);
-    const cost = peekPrice('opponent');
-    const can = (M.peeks || 0) >= cost;
     p.seat.classList.toggle('peek-target', peekMode && live && !seen && can);
-    if (peekMode && live && !seen) priceTag(p.seat, cost, can);
   });
 }
 
 async function spendPeek(target) {
   if (!M || M.phase !== 'choose') return;
   setPeekMode(false);
-  clearPriceTags();
   $('peekBtn').disabled = true;
 
   const res = await api('match/peek', { target: target === 'self' ? 'self' : M.seatOrder[target] });
-  if (!res.ok) { SFX.error(); toast(res.msg || 'No peeks left'); renderPeekButton(); return; }
+  if (!res.ok) { SFX.error(); toast(res.msg || 'No peeks left this round'); renderPeekButton(); return; }
 
   M.peeks = res.peeks;
   if (!res.free && M.stats) M.stats.peeksUsed++;
@@ -942,8 +916,7 @@ function showOpponentPeek(localIndex, card) {
 
 function usePeek() {
   if (!M || M.phase !== 'choose' || M.players[0].pick !== null) return;
-  const cheapest = Math.min(peekPrice('self'), peekPrice('opponent'));
-  if ((M.peeks || 0) < cheapest) { SFX.error(); toast('No peeks left'); return; }
+  if ((M.peeks || 0) < 1) { SFX.error(); toast('No peeks left this round'); return; }
   SFX.click();
   setPeekMode(!peekMode);
 }

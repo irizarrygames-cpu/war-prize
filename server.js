@@ -14,7 +14,7 @@ const { screenUsername } = require('./moderation');
 
 const PORT = Number(process.argv[2] || process.env.PORT || 8421);
 // Bumped whenever something worth verifying from outside ships. /api/health reports it.
-const BUILD = 18;
+const BUILD = 19;
 const ROOT = __dirname;
 const DATA_FILE = path.join(ROOT, 'data.json');
 
@@ -24,14 +24,14 @@ const MATCH_SECONDS = 60;
 const SELECT_MS = 3600, BEAT_MS = 420, REVEAL_MS = 620, RESOLVE_MS = 1300;
 const PBKDF2_ITERATIONS = 150000;
 const QUEUE_WAIT_MS = 30000;   // hunt for real players this long, then fill with bots
-// Peek charges. Looking at your own blind card is worth more than looking at someone
-// else's, so it costs more -- otherwise "always check your own" simply wins and
-// there is no decision. Simulated over 40k matches with symmetric costs: self-only
-// took 29.9% of matches against opponent-only on 27.3%. Charging 2 for self brings
-// them to 26.2% and 27.3%, close enough that neither is the obvious play.
-const PEEKS_PER_MATCH = 3;
-const SELF_PEEK_COST = 2;
-const OPP_PEEK_COST = 1;
+// Peek charges. Three of them, every card costs one, and they come back at the top
+// of every round. They used to be three for the whole match with your own blind card
+// priced at two -- simulation said that was the only way the choice of WHAT to look
+// at stayed a real decision, but it made peeking a resource you hoarded and mostly
+// never spent. Cheap and frequent is the game Noah wants: peeking is something you
+// just do, and the tension moves to what you do with what you saw.
+const PEEKS_PER_ROUND = 3;
+const PEEK_COST = 1;
 
 const MODES = {
   duel:  { players: 2 },
@@ -591,7 +591,7 @@ function startMatch(humanIds, modeKey, friendly) {
   const players = humanIds.map(uid => ({
     id: uid, bot: false, name: getUser(uid).name,
     avatar: (getUser(uid).save && getUser(uid).save.avatar) || '🎮',
-    score: 0, candidates: [], pick: null, peeks: PEEKS_PER_MATCH, peeked: false,
+    score: 0, candidates: [], pick: null, peeks: PEEKS_PER_ROUND, peeked: false,
   }));
 
   const taken = new Set(players.map(p => p.name));
@@ -599,7 +599,7 @@ function startMatch(humanIds, modeKey, friendly) {
     const b = makeBotIdentity(taken);
     players.push({
       id: null, bot: true, name: b.name, avatar: b.avatar, mood: b.mood,
-      score: 0, candidates: [], pick: null, peeks: PEEKS_PER_MATCH, peeked: false,
+      score: 0, candidates: [], pick: null, peeks: PEEKS_PER_ROUND, peeked: false,
       weakness: Math.max(0, baseWeak + (Math.random() - 0.5) * BOT_WEAKNESS_SPREAD),
     });
   }
@@ -655,6 +655,7 @@ function beginRound(m) {
     const p = m.players[i];
     p.pick = null;
     p.peeked = false;
+    p.peeks = PEEKS_PER_ROUND;   // a fresh set every round, not three for the match
     p.seen = {};                 // fresh cards, so last round's peeks mean nothing
     p.candidates = [drawKnown(), randInt(CARD_MIN, CARD_MAX)];
   });
@@ -668,7 +669,7 @@ function beginRound(m) {
       active,
       pot: m.pot,
       peeks: p.peeks,
-      peekCosts: { self: SELF_PEEK_COST, opponent: OPP_PEEK_COST },
+      peekCosts: { self: PEEK_COST, opponent: PEEK_COST },
       sudden: m.sudden,
       msLeft: Math.max(0, m.endsAt - Date.now()),
     });
@@ -680,14 +681,13 @@ function beginRound(m) {
     if (!p.bot) return;
     // Bots spend peeks too -- otherwise never seeing one would give them away.
     // Worth more when a stacked pot is on the line, so they lean on them then.
-    // A bot that peeks then takes the better card outright, which is exactly what a
-    // player's SELF peek buys -- so it has to cost the same. Charging it 1 when a
-    // player pays 2 gave every bot three looks at its own blind card to a player's one.
-    const wantsPeek = p.peeks >= SELF_PEEK_COST && Math.random() < (m.pot > 1 ? 0.45 : 0.18);
+    // A bot that peeks then takes the better card outright -- the same thing a
+    // player's peek at their own blind card buys, so it pays the same price.
+    const wantsPeek = p.peeks >= PEEK_COST && Math.random() < (m.pot > 1 ? 0.45 : 0.18);
     if (wantsPeek) {
       later(m, () => {
-        if (m.phase !== 'choose' || p.pick !== null || p.peeks < SELF_PEEK_COST) return;
-        p.peeks -= SELF_PEEK_COST;
+        if (m.phase !== 'choose' || p.pick !== null || p.peeks < PEEK_COST) return;
+        p.peeks -= PEEK_COST;
         p.peeked = true;
         m.players.forEach(x => { if (x.id) push(x.id, 'peeked', { seat: i }); });
       }, randInt(300, 700));
@@ -1361,19 +1361,15 @@ async function handleRequest(req, res) {
     if (cached !== undefined) {
       return sendJSON(res, 200, { ok: true, target, card: cached, peeks: p.peeks, free: true });
     }
-    const cost = target === idx ? SELF_PEEK_COST : OPP_PEEK_COST;
-    if (p.peeks < cost) {
-      return sendJSON(res, 200, {
-        ok: false,
-        msg: cost > 1 ? 'Not enough peeks for that' : 'No peeks left',
-      });
+    if (p.peeks < PEEK_COST) {
+      return sendJSON(res, 200, { ok: false, msg: 'No peeks left this round' });
     }
 
     // Your own blind card, or the card they can see. Never their blind card: nobody
     // knows that one yet, so revealing it would tell you more than they know.
     const card = target === idx ? p.candidates[1] : m.players[target].candidates[0];
 
-    p.peeks -= cost;
+    p.peeks -= PEEK_COST;
     p.seen[target] = card;
     p.peeked = true;
     // Everyone learns that a peek was spent, never what was looked at.

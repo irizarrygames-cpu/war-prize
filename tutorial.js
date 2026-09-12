@@ -328,7 +328,7 @@ const TUTORIAL = (() => {
     step(7, TOTAL);
     $('tutPeek').classList.remove('hidden');
     spotlight($('tutPeek'));
-    await say('Last thing. Three times a match you can peek at your face-down card.');
+    await say('Last thing. You get three peeks every round — look under your own face-down card, or at what someone else can see.');
     await nextButton();
     await say('Tap PEEK and see what you were sitting on.');
     coach(false);
