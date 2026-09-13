@@ -2424,7 +2424,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
 
 /* ================= confirm box ================= */
 
-#confirmWrap {
+#confirmWrap, #askPassWrap, #installWrap {
   position: fixed;
   inset: 0;
   z-index: 200;
@@ -2481,16 +2481,6 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
 }
 .confirm-yes:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--bad-dk), 0 1px 0 3px var(--outline); }
 
-#askPassWrap {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  background: rgba(15, 19, 32, 0.82);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
 #askPassWrap .auth-input { margin-top: 14px; }
 .danger-btn { color: var(--bad); border-color: var(--bad-dk); }
 

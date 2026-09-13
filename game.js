@@ -138,6 +138,8 @@ function isIOS() {
 // iOS only offers Add to Home Screen from Safari itself. Inside Chrome or Firefox on
 // an iPhone, or an in-app webview, the share menu has no such item, so pointing at it
 // would be sending someone looking for a button that is not there.
+function isAndroid() { return /android/i.test(navigator.userAgent); }
+
 function isIOSSafari() {
   return isIOS() && /safari/i.test(navigator.userAgent) && !/crios|fxios|edgios/i.test(navigator.userAgent);
 }
@@ -161,10 +163,12 @@ function dismissInstall() {
 function refreshInstallBar() {
   const bar = $('installBar');
   if (!bar) return;
-  // Not before a first match. Asking someone to install a game they have not played
-  // is exactly the behaviour that taught everyone to close these on sight.
-  const earned = typeof SAVE !== 'undefined' && SAVE && SAVE.matches >= 1;
-  bar.classList.toggle('hidden', !(canInstall() && earned && !installDismissed()));
+  // This used to wait until you had played a match, on the theory that offering an
+  // install to someone who has not played yet is a nag. In practice it hid the thing
+  // from the only person actively looking for it -- "wheres the download" -- which is
+  // a much worse failure than a strip somebody taps away once. It shows as soon as
+  // the browser says an install is possible.
+  bar.classList.toggle('hidden', !(canInstall() && !installDismissed()));
 }
 
 async function doInstall() {
@@ -178,7 +182,7 @@ async function doInstall() {
     if (outcome !== 'accepted') refreshInstallBar();
     return;
   }
-  if (isIOSSafari()) showInstallSteps();
+  showInstallSteps();               // no API here: say where the browser keeps it
 }
 
 function stepRow(n, text, iconName) {
@@ -195,12 +199,38 @@ function stepRow(n, text, iconName) {
   return row;
 }
 
+// Every browser hides this somewhere different, so the instructions have to match the
+// one you are actually holding. Getting this wrong sends someone hunting for a button
+// that is not there, which is worse than saying nothing.
 function showInstallSteps() {
   const steps = $('installSteps');
+  const title = $('installTitle');
   steps.innerHTML = '';
-  steps.appendChild(stepRow(1, 'Tap the Share button at the bottom of Safari', 'share'));
-  steps.appendChild(stepRow(2, 'Scroll down and tap Add to Home Screen', 'plusbox'));
-  steps.appendChild(stepRow(3, 'Tap Add. War Prize lands on your home screen.', null));
+
+  if (isIOSSafari()) {
+    title.textContent = 'Put War Prize on your home screen';
+    steps.appendChild(stepRow(1, 'Tap the Share button at the bottom of Safari', 'share'));
+    steps.appendChild(stepRow(2, 'Scroll down and tap Add to Home Screen', 'plusbox'));
+    steps.appendChild(stepRow(3, 'Tap Add. War Prize lands on your home screen.', null));
+  } else if (isIOS()) {
+    // Chrome and Firefox on an iPhone are Safari underneath but get no Add to Home
+    // Screen item at all -- only Safari itself can do it.
+    title.textContent = 'Open this in Safari first';
+    steps.appendChild(stepRow(1, 'Only Safari can add a game to the home screen on an iPhone.', null));
+    steps.appendChild(stepRow(2, 'Open war-prize.onrender.com in Safari, then tap Share', 'share'));
+    steps.appendChild(stepRow(3, 'Choose Add to Home Screen', 'plusbox'));
+  } else if (isAndroid()) {
+    title.textContent = 'Add War Prize to your phone';
+    steps.appendChild(stepRow(1, 'Open the browser menu (the three dots, top right)', null));
+    steps.appendChild(stepRow(2, 'Tap Install app, or Add to Home screen', 'plusbox'));
+    steps.appendChild(stepRow(3, 'Confirm. War Prize gets its own icon.', null));
+  } else {
+    title.textContent = 'Install War Prize on this computer';
+    steps.appendChild(stepRow(1, 'Look for the install icon at the right-hand end of the address bar', 'install'));
+    steps.appendChild(stepRow(2, 'No icon? Open the browser menu and look for Install War Prize, or Apps', null));
+    steps.appendChild(stepRow(3, 'It opens in its own window, with no address bar.', null));
+  }
+
   $('installWrap').classList.remove('hidden');
   SFX.panelOpen();
 }
@@ -641,10 +671,12 @@ function panelProfile() {
     wrap.appendChild(admin);
   }
 
-  // The strip on the menu can be dismissed for good, so there has to be a way back
-  // to this. Hidden entirely where the browser cannot install anything, rather than
-  // offering a button that would do nothing.
-  if (canInstall()) {
+  // The strip can be dismissed for good, so Profile is the way back to it -- and it
+  // is where anyone hunting for a download will look. So it is here whenever the game
+  // is not already installed, even on a browser with no install API of its own: in
+  // that case tapping it explains where the browser keeps the button, which beats a
+  // menu that simply has no answer.
+  if (!isStandalone()) {
     const inst = el('button', 'ghost-btn install-btn');
     const ico = el('span', 'gb-ico');
     ico.innerHTML = icon('install');
