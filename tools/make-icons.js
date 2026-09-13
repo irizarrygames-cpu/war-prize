@@ -8,6 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const crypto = require('crypto');
 
 /* ---------------- PNG writing ---------------- */
 
@@ -187,7 +188,43 @@ const jobs = [
   ['icon-180.png', 180, 0.06],   // apple-touch-icon, which iOS rounds itself
   ['icon-maskable-512.png', 512, 0.18],
 ];
+const written = [];
 for (const [name, size, inset] of jobs) {
-  writePNG(path.join(here, name), size, render(size, inset));
+  const file = path.join(here, name);
+  writePNG(file, size, render(size, inset));
+  written.push(fs.readFileSync(file));
   console.log('wrote ' + name + '  ' + size + 'x' + size);
+}
+
+/* ---------------- cache busting ----------------
+   Browsers cache favicons far harder than anything else -- Chrome keeps them in a
+   separate store and will happily ignore Cache-Control on them -- and a phone holds
+   onto an installed app's icon for as long as it likes. So a redraw shipped and
+   nobody saw it: the server was serving the new bytes and every client kept drawing
+   the old ones.
+
+   The fix is to change the URL, not the headers. Every icon reference carries a short
+   hash of the icon bytes themselves, stamped in here whenever they are regenerated,
+   so a redraw is a different URL and a browser has no old copy of it. Redraw nothing
+   and the hash does not move, so nothing is re-downloaded for no reason.
+
+   The query string never reaches the filesystem: serveStatic resolves url.pathname,
+   which does not include it. */
+const stamp = crypto.createHash('sha1').update(Buffer.concat(written)).digest('hex').slice(0, 8);
+
+for (const f of ['index.html', 'manifest.webmanifest']) {
+  const p = path.join(here, f);
+  const before = fs.readFileSync(p, 'utf8');
+  let text = before;
+  for (const [name] of jobs) {
+    // drop whatever stamp is already on it, then put the current one on
+    text = text.split(name + '?v=')
+               .map((part, i) => (i === 0 ? part : part.replace(/^[a-f0-9]+/, '')))
+               .join(name);
+    text = text.split(name).join(name + '?v=' + stamp);
+  }
+  if (text !== before) {
+    fs.writeFileSync(p, text);
+    console.log('stamped ' + f + ' -> ?v=' + stamp);
+  }
 }
