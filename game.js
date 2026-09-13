@@ -149,26 +149,33 @@ function canInstall() {
   return !!installEvent || isIOSSafari();
 }
 
+// Tapping the X used to silence this for good, so one stray tap and the only way back
+// was a Profile entry nobody knew to look for. It waits a week instead.
+const INSTALL_SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
+
 function installDismissed() {
-  try { return localStorage.getItem(INSTALL_DISMISS_KEY) === '1'; } catch (e) { return false; }
+  try {
+    const at = Number(localStorage.getItem(INSTALL_DISMISS_KEY) || 0);
+    return at > 0 && Date.now() - at < INSTALL_SNOOZE_MS;
+  } catch (e) { return false; }
 }
 
 // localStorage, not SAVE: whether you have installed the game is a fact about this
 // device, and SAVE follows the account to every other one.
 function dismissInstall() {
-  try { localStorage.setItem(INSTALL_DISMISS_KEY, '1'); } catch (e) { /* private mode */ }
+  try { localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now())); } catch (e) { /* private mode */ }
   $('installBar').classList.add('hidden');
 }
 
 function refreshInstallBar() {
   const bar = $('installBar');
   if (!bar) return;
-  // This used to wait until you had played a match, on the theory that offering an
-  // install to someone who has not played yet is a nag. In practice it hid the thing
-  // from the only person actively looking for it -- "wheres the download" -- which is
-  // a much worse failure than a strip somebody taps away once. It shows as soon as
-  // the browser says an install is possible.
-  bar.classList.toggle('hidden', !(canInstall() && !installDismissed()));
+  // Shown whenever the game is not already installed -- not only where the browser
+  // offers a one-tap install. Tapping it does something useful everywhere now: either
+  // it fires the real prompt, or it says where that browser keeps the button. Gating
+  // it on the prompt meant "i dont see a download thing" on any phone that had not
+  // fired the event yet, which is the failure that matters.
+  bar.classList.toggle('hidden', isStandalone() || installDismissed());
 }
 
 async function doInstall() {
