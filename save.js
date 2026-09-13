@@ -43,20 +43,44 @@ const DEFAULT_SAVE = {
 
 /* ---------------- transport ---------------- */
 
+/* Every request gets a deadline.
+
+   fetch() has no timeout of its own -- it waits for as long as the connection stays
+   open, and a connection can stay open long after it has stopped carrying anything.
+   A phone moving from wifi to cellular, a carrier NAT dropping an idle socket without
+   telling either end, a handset waking from sleep: the request just hangs.
+
+   That is fatal here rather than merely slow, because /api/poll is a LONG poll held
+   open for twenty seconds and the whole game runs on it. One hung poll and the loop
+   never takes another step: no rounds, no reveals, no match-start. The game simply
+   stops, which is exactly the freeze players were hitting.
+
+   The poll gets longer than the server's hold plus margin; everything else is a
+   normal request and gets fifteen seconds. A timeout comes back as offline, which
+   the callers already treat as 'try again'. */
+const API_TIMEOUT_MS = 15000;
+const POLL_TIMEOUT_MS = 35000;          // server holds it 20s
+
 async function api(route, payload = {}) {
+  const ctrl = new AbortController();
+  const limit = route === 'poll' ? POLL_TIMEOUT_MS : API_TIMEOUT_MS;
+  const bell = setTimeout(() => ctrl.abort(), limit);
   try {
     const res = await fetch('/api/' + route, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: AUTH_TOKEN, ...payload }),
+      signal: ctrl.signal,
     });
     if (res.status === 401) return { ok: false, msg: 'Session expired — sign in again', unauthorized: true };
     return await res.json();
   } catch (e) {
-    return { ok: false, msg: 'Cannot reach the server', offline: true };
+    const timedOut = e && e.name === 'AbortError';
+    return { ok: false, msg: timedOut ? 'The server took too long' : 'Cannot reach the server', offline: true, timedOut };
+  } finally {
+    clearTimeout(bell);
   }
 }
-
 function deepMerge(base, patch) {
   for (const k of Object.keys(patch || {})) {
     const v = patch[k];

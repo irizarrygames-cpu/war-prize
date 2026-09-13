@@ -10,6 +10,13 @@ const SFX = (() => {
   let master = null;      // everything lands here
   let bus = null;         // pre-compressor mix
   let muted = false;
+
+  // A phone that backgrounds the tab stops polling; when it comes back the whole
+  // backlog arrives in one go and every sound in it fires at once. Muting for a
+  // moment while the game catches up is the difference between a burst of noise from
+  // a game you are not even looking at and simply arriving at the current round.
+  // Kept apart from `muted`, which is the player's own setting and must not be touched.
+  let hushUntil = 0;
   let musicGain = null;
   let musicTimer = null;
   let musicStep = 0;
@@ -54,7 +61,7 @@ const SFX = (() => {
     freq = 440, type = 'sine', dur = 0.15, vol = 0.3, attack = 0.005,
     slideTo = null, slideCurve = 'exp', delay = 0, dest = null, wobble = 25, hold = 0,
   }) {
-    if (muted) return;
+    if (muted || Date.now() < hushUntil) return;
     ensure();
     const t0 = now() + delay;
     const f = detune(freq, wobble);
@@ -81,7 +88,7 @@ const SFX = (() => {
     dur = 0.2, vol = 0.3, delay = 0, filterFreq = 1200, type = 'lowpass',
     q = 1, sweepTo = null, curve = 1,
   }) {
-    if (muted) return;
+    if (muted || Date.now() < hushUntil) return;
     ensure();
     const t0 = now() + delay;
     const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
@@ -124,6 +131,8 @@ const SFX = (() => {
   const api = {
     unlock() { ensure(); },
     setMuted(v) { muted = v; if (muted) api.stopMusic(); },
+    // Swallow whatever is about to be played. Used when a backlog of events lands.
+    hush(ms) { hushUntil = Date.now() + ms; },
     isMuted() { return muted; },
 
     /* ---------------- interface ---------------- */
@@ -332,7 +341,7 @@ const SFX = (() => {
 
     // Simple bass pulse under the match, with a hat on the offbeat.
     startMusic() {
-      if (muted) return;
+      if (muted || Date.now() < hushUntil) return;
       ensure();
       api.stopMusic();
       musicStep = 0;

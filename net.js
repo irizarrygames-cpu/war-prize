@@ -22,7 +22,13 @@ function connectEvents() {
   (async () => {
     while (gen === POLLING && AUTH_TOKEN) {
       const res = await api('poll');
-      if (gen !== POLLING) return;
+      // Do NOT drop what already arrived. The server clears an event the moment it
+      // hands it over, so anything discarded here is gone for good -- and if that
+      // was match-start, the player sits on the matchmaking screen for ever while a
+      // match they cannot see plays out without them. Deliver it, then stand down.
+      lastPollAt = Date.now();
+      const stale = gen !== POLLING;
+      if (stale && !AUTH_TOKEN) return;          // signed out: the events are not ours
       if (!res || !res.ok) {
         // Never just stop. Returning quietly here left players staring at a
         // matchmaking screen that would never move, with nothing to tell them why.
@@ -30,14 +36,79 @@ function connectEvents() {
         await new Promise(r => setTimeout(r, 1500));      // server hiccup, back off
         continue;
       }
+      // A handful of events is an ordinary round. A pile of them means this client
+      // was not being listened to for a while -- a backgrounded tab, a sleeping phone
+      // -- and is now catching up on a match that moved on without it. Replay it
+      // silently: the sounds are for things that already happened.
+      const backlog = (res.events || []).length;
+      if (backlog > 5) { try { SFX.hush(1200); } catch (e) {} }
+
       (res.events || []).forEach(ev => {
-        try { handleServerEvent(ev); } catch (e) { /* one bad event mustn't kill the loop */ }
+        try { handleServerEvent(ev); }
+        catch (err) {
+          // Keeping the loop alive is right -- one bad event must not stop the rest
+          // arriving. Doing it SILENTLY was not: this swallowed a crash inside
+          // startOnlineMatch whole, which is how a player ends up sitting on the
+          // matchmaking screen listening to the sound of a match they cannot see.
+          console.error('[war-prize] event failed:', ev && ev.type, err);
+          if (ev && ev.type === 'match-start') matchStartFailed(err);
+        }
       });
+      if (stale) return;
     }
   })();
 }
 
 function disconnectEvents() { POLLING++; }
+
+/* A belt to go with the braces on the timeouts.
+
+   Every poll now has a deadline, so the loop should always keep moving. If it stops
+   anyway -- a bug in here, a promise that never settles, a browser that suspended the
+   tab mid-request and never resumed it -- nothing else in the game would ever notice,
+   because the whole thing is driven by that one loop. So it is watched from outside.
+
+   Restarting is cheap and safe: connectEvents bumps the generation, the old loop
+   stands down, and /api/sync puts us back in whatever match the server still has us
+   in. Far better than a game that has quietly stopped. */
+let lastPollAt = 0;
+const POLL_STALL_MS = 60000;            // two whole polls plus margin
+
+setInterval(() => {
+  if (!AUTH_TOKEN || !lastPollAt) return;
+  if (document.visibilityState !== 'visible') return;   // backgrounded tabs are throttled on purpose
+  if (Date.now() - lastPollAt < POLL_STALL_MS) return;
+  console.warn('[war-prize] event loop stalled for ' + Math.round((Date.now() - lastPollAt) / 1000) + 's — reconnecting');
+  lastPollAt = Date.now();
+  connectEvents();
+}, 10000);
+
+// Coming back to the game is the moment a stall is most likely to have happened, and
+// the moment the player is most likely to notice. Check then too, rather than waiting
+// up to ten seconds for the next sweep.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !AUTH_TOKEN) return;
+  if (lastPollAt && Date.now() - lastPollAt > POLL_STALL_MS) {
+    lastPollAt = Date.now();
+    connectEvents();
+  }
+});
+
+// If the match could not be built we cannot play it, and leaving the player on a
+// matchmaking screen that will never move is the worst of the options. Get them back
+// to the menu with an explanation, and take the seat out of the match so the others
+// are not waiting on somebody who is not there.
+function matchStartFailed(err) {
+  try { api('match/leave'); } catch (e) {}
+  M = null;
+  clearQueueWatchdog();
+  clearInterval(queueTimer);
+  queueTimer = null;
+  try { SFX.stopMusic(); } catch (e) {}
+  show('menuScreen');
+  renderMenu();
+  toast('Something went wrong starting that match');
+}
 
 // The session is gone -- expired, or signed in somewhere else. Say so and hand back
 // the sign-in screen rather than leaving the game frozen.
@@ -721,7 +792,7 @@ function playRewardFx(rewards) {
   const chips = [$('rewardTrophy'), $('rewardXp'), $('rewardCoins')];
   chips.forEach((chip, i) => {
     chip.classList.remove('pop-in');
-    later(() => {
+    soon(() => {
       void chip.offsetWidth;
       chip.classList.add('pop-in');
       const c = FX.centreOf(chip);
@@ -730,23 +801,23 @@ function playRewardFx(rewards) {
     }, 500 + i * 260);
   });
 
-  later(() => FX.rewardRain($('menuCoins'), '🪙', Math.min(6, Math.ceil(rewards.coins / 8))), 1400);
+  soon(() => FX.rewardRain($('menuCoins'), '🪙', Math.min(6, Math.ceil(rewards.coins / 8))), 1400);
 
   if (rewards.levelsGained) {
-    later(() => {
+    soon(() => {
       SFX.levelUp();
       FX.confetti(innerWidth / 2, innerHeight * 0.4, { n: 30 });
       FX.speedLines('#6fd6ff');
     }, 1900);
   }
   if (rewards.arenaUp) {
-    later(() => {
+    soon(() => {
       SFX.arenaUp();
       FX.confetti(innerWidth / 2, innerHeight * 0.35, { n: 40 });
       FX.ring(innerWidth / 2, innerHeight / 2, { size: Math.max(innerWidth, innerHeight), color: '#ffc93c', life: 700, thick: 10 });
     }, 2300);
   } else if (rewards.arenaDown) {
-    later(() => SFX.arenaDown(), 2300);
+    soon(() => SFX.arenaDown(), 2300);
   }
 }
 

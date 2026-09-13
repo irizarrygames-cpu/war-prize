@@ -830,6 +830,15 @@ function later(fn, ms) {
   return t;
 }
 
+// For anything that has to happen AFTER a match rather than during one -- the reward
+// chips, the coin rain, a level-up. later() deliberately drops its callback once the
+// match is over, which is right for round effects and exactly wrong for these: they
+// are scheduled at match end, by which time M is already gone, so every one of them
+// was being thrown away.
+function soon(fn, ms) {
+  return setTimeout(() => { try { fn(); } catch (e) { console.error('[war-prize] effect failed:', e); } }, ms);
+}
+
 function clearMatchTimers() {
   if (!M) return;
   M.timers.forEach(clearTimeout);
