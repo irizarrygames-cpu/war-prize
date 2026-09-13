@@ -74,8 +74,33 @@ function inCard(x, y, cx, cy, w, h, r, deg) {
   return qx * qx + qy * qy <= r * r;
 }
 
+// Puts a point into a card's own frame, so everything drawn on the card can be
+// described in flat, upright coordinates and then tilts along with it.
+function toLocal(x, y, cx, cy, deg) {
+  const a = -deg * Math.PI / 180;
+  const dx = x - cx, dy = y - cy;
+  return [dx * Math.cos(a) - dy * Math.sin(a), dx * Math.sin(a) + dy * Math.cos(a)];
+}
+
+// A rectangle inside that frame, optionally turned -- the two strokes of a 7.
+function inBar(lx, ly, cx, cy, w, h, deg) {
+  const a = -(deg || 0) * Math.PI / 180;
+  const dx = lx - cx, dy = ly - cy;
+  const px = dx * Math.cos(a) - dy * Math.sin(a);
+  const py = dx * Math.sin(a) + dy * Math.cos(a);
+  return Math.abs(px) <= w / 2 && Math.abs(py) <= h / 2;
+}
+
+// One wedge of the sunburst behind the cards.
+function inRay(x, y, cx, cy, fromDeg, widthDeg) {
+  const a = Math.atan2(y - cy, x - cx) * 180 / Math.PI;
+  return (((a - fromDeg) % 360) + 360) % 360 < widthDeg;
+}
+
 const OUTLINE = hex('#0f1320');
 const NAVY = hex('#1b2333');
+const NAVY_2 = hex('#232c41');
+const INK = hex('#3a2400');      // the brown the game uses for text on gold
 const GOLD = hex('#ffc93c');
 const WHITE = hex('#fdfdff');
 
@@ -87,17 +112,42 @@ function render(size, inset) {
   const box = S - pad * 2;
   const cx = S / 2, cy = S / 2;
 
-  const cardW = box * 0.46, cardH = box * 0.66, radius = box * 0.07;
+  const cardW = box * 0.44, cardH = box * 0.62, radius = box * 0.07;
   const lip = box * 0.055;          // thickness of the dark outline
 
-  const shapes = [
-    // back card, tilted left
-    { test: (x, y) => inCard(x, y, cx - box * 0.13, cy, cardW + lip * 2, cardH + lip * 2, radius + lip, -14), c: OUTLINE },
-    { test: (x, y) => inCard(x, y, cx - box * 0.13, cy, cardW, cardH, radius, -14), c: WHITE },
-    // front card, tilted right
-    { test: (x, y) => inCard(x, y, cx + box * 0.13, cy + box * 0.02, cardW + lip * 2, cardH + lip * 2, radius + lip, 12), c: OUTLINE },
-    { test: (x, y) => inCard(x, y, cx + box * 0.13, cy + box * 0.02, cardW, cardH, radius, 12), c: GOLD },
-  ];
+  // The two cards of the actual decision: one you can see, one you cannot. The gold
+  // one carries a 7 so the icon says "numbers" at a glance -- at 48 pixels on a home
+  // screen two blank rectangles could be anything.
+  const backX = cx - box * 0.15, backY = cy - box * 0.015, backDeg = -15;
+  const frontX = cx + box * 0.13, frontY = cy + box * 0.03, frontDeg = 12;
+
+  const shapes = [];
+
+  // Sunburst, one shade off the background. A pattern, never a glow.
+  for (let i = 0; i < 20; i += 2) {
+    shapes.push({ test: (x, y) => inRay(x, y, cx, cy, i * 18, 18), c: NAVY_2 });
+  }
+
+  // back card, tilted left -- face down, so it stays blank
+  shapes.push({ test: (x, y) => inCard(x, y, backX, backY, cardW + lip * 2, cardH + lip * 2, radius + lip, backDeg), c: OUTLINE });
+  shapes.push({ test: (x, y) => inCard(x, y, backX, backY, cardW, cardH, radius, backDeg), c: WHITE });
+
+  // front card, tilted right, with the number on it
+  shapes.push({ test: (x, y) => inCard(x, y, frontX, frontY, cardW + lip * 2, cardH + lip * 2, radius + lip, frontDeg), c: OUTLINE });
+  shapes.push({ test: (x, y) => inCard(x, y, frontX, frontY, cardW, cardH, radius, frontDeg), c: GOLD });
+
+  // A 7, built from its two strokes in the card's own frame. Deliberately huge and
+  // thick: a numeral drawn at a sensible weight disappears at icon sizes.
+  const bar = cardW * 0.20;                       // stroke thickness
+  shapes.push({
+    c: INK,
+    test: (x, y) => {
+      const [lx, ly] = toLocal(x, y, frontX, frontY, frontDeg);
+      const top = inBar(lx, ly, 0, -cardH * 0.21, cardW * 0.52, bar, 0);
+      const leg = inBar(lx, ly, cardW * 0.12, cardH * 0.10, bar, cardH * 0.48, 22);
+      return top || leg;
+    },
+  });
 
   const out = Buffer.alloc(S * S * 4);
   const SS = 3;                     // supersampling, so the edges are not jagged
@@ -108,7 +158,7 @@ function render(size, inset) {
         for (let sx = 0; sx < SS; sx++) {
           const px = x + (sx + 0.5) / SS, py = y + (sy + 0.5) / SS;
           let col = NAVY;
-          for (const s of shapes) if (s.test(px, py)) col = s.c;
+          for (const sh of shapes) if (sh.test(px, py)) col = sh.c;
           r += col[0]; g += col[1]; b += col[2];
         }
       }
