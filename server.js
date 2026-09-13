@@ -14,7 +14,7 @@ const { screenUsername } = require('./moderation');
 
 const PORT = Number(process.argv[2] || process.env.PORT || 8421);
 // Bumped whenever something worth verifying from outside ships. /api/health reports it.
-const BUILD = 32;
+const BUILD = 33;
 const ROOT = __dirname;
 const DATA_FILE = path.join(ROOT, 'data.json');
 
@@ -339,7 +339,7 @@ function rankedUsers() {
 // never drift apart and leave dangling references behind.
 async function removeAccount(target) {
   const m = matchOf(target);
-  if (m && !m.over) finishMatch(m, target);
+  if (m && !m.over) leaveMatch(m, target);   // the others play on, same as any walk-out
   leaveQueue(target);
 
   for (const [id, u] of Object.entries(DB.users)) {
@@ -616,6 +616,7 @@ function startMatch(humanIds, modeKey, friendly) {
   const m = {
     id, mode: modeKey,
     friendly: !!friendly,
+    baseWeak,                    // kept so a seat vacated mid-match can be taken over
     players,
     pot: 1,
     round: 0,
@@ -836,6 +837,41 @@ function enterSuddenDeath(m, tied) {
     if (p.id) push(p.id, 'sudden-death', { active: tied, names: tied.map(i => m.players[i].name) });
   });
   later(m, () => beginRound(m), 2300);
+}
+
+// One player walking out used to call finishMatch, which ends the match for EVERYONE
+// and hands the other three a result screen they did not ask for. In a game built to
+// be played against real people that is the one thing a player must not be able to do
+// to the others.
+//
+// So a vacated seat is taken over rather than removed. The seat keeps its name and its
+// score and plays on as a bot, which the game is already full of and which the client
+// is never told about -- from the other three players' side nothing happened at all.
+function leaveMatch(m, userId) {
+  if (!m || m.over) return;
+  const idx = m.players.findIndex(p => p.id === userId);
+  if (idx < 0) return;
+
+  const p = m.players[idx];
+  p.id = null;
+  p.bot = true;
+  p.mood = pickOne(MOOD_KEYS);
+  p.weakness = Math.max(0, (m.baseWeak != null ? m.baseWeak : 0.3) + (Math.random() - 0.5) * BOT_WEAKNESS_SPREAD);
+  playerMatch.delete(userId);
+
+  // Nobody left to watch it. Tear it down rather than run a match for an empty room.
+  if (!m.players.some(x => x.id)) {
+    m.over = true;
+    clearMatchTimers(m);
+    matches.delete(m.id);
+    return;
+  }
+
+  // Their seat may owe this round a card -- the round timer would cover it, but only
+  // after the full wait, which would stall everyone else for no reason.
+  if (m.phase === 'choose' && p.pick === null && activeIdx(m).includes(idx)) {
+    submitPickIndex(m, idx, botChoice(p));
+  }
 }
 
 function finishMatch(m, forfeitBy) {
@@ -1443,7 +1479,7 @@ async function handleRequest(req, res) {
 
   if (route === '/api/match/leave') {
     const m = matchOf(me);
-    if (m) finishMatch(m, me);
+    if (m) leaveMatch(m, me);
     return sendJSON(res, 200, { ok: true });
   }
 

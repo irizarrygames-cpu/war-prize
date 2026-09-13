@@ -147,7 +147,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
 
 /* ================= shared chunky pieces ================= */
 
-.tb-pill, .seat-info, #scoreboard, #matchTimer, .react-btn, .quit-btn,
+.tb-pill, .seat-info, #scoreboard, #matchTimer, .react-btn,
 .nav-btn, .mm-slot, .grid-cell, .chal-row, .arena-row, .stat-row, .reward {
   border: 3px solid var(--outline);
 }
@@ -1815,20 +1815,6 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
 }
 .react-btn:active { transform: translateY(3px); box-shadow: 1px 1px 0 var(--outline); }
 
-.quit-btn {
-  position: absolute;
-  left: 14px; bottom: 14px;
-  z-index: 5;
-  width: 40px; height: 40px;
-  background: var(--panel);
-  color: var(--txt);
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 900;
-  cursor: pointer;
-  box-shadow: 1px 4px 0 var(--outline);
-}
-.quit-btn:hover { background: var(--bad); }
 
 #suddenDeath {
   position: absolute;

@@ -1367,23 +1367,10 @@ function tickClock() {
 // Leaving drops you to last place. We do NOT tear the match down here -- the server
 // answers with match-end, which shows the standings and applies the trophy loss.
 // Bailing out locally would let anyone dodge a defeat by quitting.
-function quitMatch() {
-  if (!M || M.leaving) return;
-  M.leaving = true;
-  api('match/leave');
-
-  setTimeout(() => {                      // don't strand the player if the server never replies
-    if (!M || !M.leaving) return;
-    M = null;
-    clearGrabs();
-    SFX.stopMusic();
-    $('matchScreen').classList.remove('sudden-mode');
-    $('dangerVignette').classList.remove('on');
-    $('fxLayer').innerHTML = '';
-    show('menuScreen');
-    renderMenu();
-  }, 3000);
-}
+// There is deliberately no way out of a match in progress. Matches run sixty seconds
+// against real people, and the quit button ended the match for all four of them, not
+// just whoever pressed it. If someone does close the tab, the server hands their seat
+// to a bot and the other three play the round out -- see leaveMatch in server.js.
 
 /* ---- victory effects ---- */
 
@@ -1423,7 +1410,6 @@ $('playBtn').onclick = () => { SFX.unlock(); SFX.click(); joinQueue(); };
 $('playAgainBtn').onclick = () => { SFX.click(); joinQueue(); };
 $('resultMenuBtn').onclick = () => { SFX.click(); show('menuScreen'); renderMenu(); };
 $('mmCancel').onclick = () => { SFX.click(); leaveQueueUi(); };
-$('quitBtn').onclick = quitMatch;
 $('panelClose').onclick = () => { SFX.back(); closePanel(); };
 $('panelWrap').onclick = e => { if (e.target === $('panelWrap')) closePanel(); };
 
