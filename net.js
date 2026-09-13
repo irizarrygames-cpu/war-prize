@@ -755,6 +755,8 @@ function netPick(index) { api('match/pick', { index }); }
 /* ---------------- boot ---------------- */
 
 (async () => {
+  paintIcons();
+  paintCrest();
   if (await resumeSession()) {
     enterGame();
     connectEvents();
