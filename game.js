@@ -257,7 +257,6 @@ addEventListener('appinstalled', () => {
 function renderMenu() {
   if (!SAVE) return;
   paintIcons();
-  paintCrest();
   refreshInstallBar();
   buildMenuBackdrop();
   renderModePicker();

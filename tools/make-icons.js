@@ -114,21 +114,28 @@ const NAVY_2 = hex('#232c41');
 const INK = hex('#3a2400');      // the brown the game uses for text on gold
 const ORANGE = hex('#ff6b2c');   // the streak colour -- the game's hot end
 const EMBER  = hex('#272a35');   // burst rays: barely there, just enough to not be flat
-const FLAME_HOT = hex('#ffe07a');
+const GREY = hex('#b9c4d4');    // the question mark, so it reads as printed on the card
 const GOLD = hex('#ffc93c');
 const WHITE = hex('#fdfdff');
 
-// A flame, on a 100x100 grid, walked clockwise from the tip. The notch on the lower
-// left is what stops it reading as a leaf or a teardrop.
-const FLAME = [
-  [50, 3], [60, 23], [72, 39], [79, 58], [75, 77], [60, 91],
-  [40, 91], [25, 77], [21, 58], [30, 39], [37, 52], [43, 33], [47, 17],
-];
+// The crown, on its own 24-unit grid so it can be dropped onto a card at any size.
+const CROWN = [[2.4, 7.4], [7, 12], [12, 3.4], [17, 12], [21.6, 7.4], [21.6, 18.8], [2.4, 18.8]];
 
-// Scaling a polygon about a point is not a true outline offset, but for a shape this
-// chunky it is indistinguishable and it costs one line.
-function grow(pts, k, ox, oy) {
-  return pts.map(([x, y]) => [ox + (x - ox) * k, oy + (y - oy) * k]);
+// A question mark, drawn rather than typed: no font rendering in here, and a glyph
+// would be at the mercy of whatever face the machine building this happens to have.
+// Hook, then the dot. Same 24-unit grid as the crown.
+function inQuestion(gx, gy) {
+  const d2 = (ax, ay) => (gx - ax) * (gx - ax) + (gy - ay) * (gy - ay);
+  // the ring of the hook, upper half and right side only
+  const ringOuter = 7.4, ringInner = 3.9;
+  const r2 = d2(12, 8.4);
+  const onRing = r2 <= ringOuter * ringOuter && r2 >= ringInner * ringInner;
+  if (onRing && (gy <= 8.4 || gx >= 12)) return true;
+  // the stem dropping from the ring down to the dot
+  if (gx >= 10.2 && gx <= 13.8 && gy >= 12.5 && gy <= 17.4) return true;
+  // the dot
+  if (d2(12, 20.6) <= 2.5 * 2.5) return true;
+  return false;
 }
 
 function render(size, inset) {
@@ -141,39 +148,64 @@ function render(size, inset) {
 
   const shapes = [];
 
-  // Burst rays. Warm rather than blue this time, so the dark parts of the square are
-  // lit by the flame instead of sitting behind it.
-  for (let i = 0; i < 24; i += 2) {
-    shapes.push({ test: (x, y) => inRay(x, y, cx, cy * 1.04, i * 15, 15), c: EMBER });
+  // Faint burst, so the square is not flat behind the cards.
+  for (let i = 0; i < 20; i += 2) {
+    shapes.push({ test: (x, y) => inRay(x, y, cx, cy, i * 18, 18), c: NAVY_2 });
   }
 
-  /* ---- the flame, sitting high so the card can overlap its base ---- */
-  const fW = box * 0.68, fH = box * 0.84;
-  const fx = cx, fy = cy - box * 0.13;
-  const toFlame = (x, y) => [((x - fx) / fW + 0.5) * 100, ((y - fy) / fH + 0.5) * 100];
+  // The two cards of the actual decision, fanned the way the logo has them: the one
+  // you cannot see, and the prize. The trophy and coins from the full lockup are left
+  // out on purpose -- six objects inside 48 pixels is a smudge, and these two are the
+  // ones that carry the game.
+  const cardW = box * 0.38, cardH = box * 0.54, radius = box * 0.065;
+  const lip = box * 0.046;
 
-  const outer = grow(FLAME, 1.13, 50, 50);
-  shapes.push({ test: (x, y) => { const [u, v] = toFlame(x, y); return inPoly(u, v, outer); }, c: OUTLINE });
-  shapes.push({ test: (x, y) => { const [u, v] = toFlame(x, y); return inPoly(u, v, FLAME); }, c: ORANGE });
+  const back  = { x: cx - box * 0.145, y: cy - box * 0.01, deg: -15 };
+  const front = { x: cx + box * 0.125, y: cy + box * 0.015, deg: 12 };
 
-  // the hot core, pulled down and in -- a flame is brightest low and centre
-  const core = grow(FLAME, 0.52, 50, 74);
-  shapes.push({ test: (x, y) => { const [u, v] = toFlame(x, y); return inPoly(u, v, core); }, c: GOLD });
-  const heart = grow(FLAME, 0.24, 50, 80);
-  shapes.push({ test: (x, y) => { const [u, v] = toFlame(x, y); return inPoly(u, v, heart); }, c: FLAME_HOT });
+  // emphasis dashes, out beyond the cards
+  const dash = (ax, ay, bx, by) => ({
+    c: GOLD,
+    test: (x, y) => {
+      const mx = (ax + bx) / 2, my = (ay + by) / 2;
+      const dx = bx - ax, dy = by - ay;
+      const len = Math.hypot(dx, dy), deg = Math.atan2(dy, dx) * 180 / Math.PI;
+      return inBar(x, y, mx, my, len, box * 0.046, deg);
+    },
+  });
+  const dx0 = box * 0.485, dx1 = box * 0.39;
+  shapes.push(dash(cx - dx0, cy - box * 0.20, cx - dx1, cy - box * 0.14));
+  shapes.push(dash(cx - dx0 - box * 0.02, cy, cx - dx1, cy));
+  shapes.push(dash(cx - dx0, cy + box * 0.20, cx - dx1, cy + box * 0.14));
+  shapes.push(dash(cx + dx0, cy - box * 0.20, cx + dx1, cy - box * 0.14));
+  shapes.push(dash(cx + dx0 + box * 0.02, cy, cx + dx1, cy));
+  shapes.push(dash(cx + dx0, cy + box * 0.20, cx + dx1, cy + box * 0.14));
 
-  /* ---- the cards, low and overlapping the flame's base ---- */
-  const cardW = box * 0.33, cardH = box * 0.46, radius = box * 0.055;
-  const lip = box * 0.045;
-  const cardY = cy + box * 0.29;
-
-  const back = { x: cx - box * 0.13, y: cardY - box * 0.012, deg: -19 };
-  const front = { x: cx + box * 0.10, y: cardY, deg: 15 };
-
+  // the blind card, with a question mark on it
   shapes.push({ test: (x, y) => inCard(x, y, back.x, back.y, cardW + lip * 2, cardH + lip * 2, radius + lip, back.deg), c: OUTLINE });
   shapes.push({ test: (x, y) => inCard(x, y, back.x, back.y, cardW, cardH, radius, back.deg), c: WHITE });
+  const qg = cardW * 0.66 / 24;
+  shapes.push({
+    c: GREY,
+    test: (x, y) => {
+      const [lx, ly] = toLocal(x, y, back.x, back.y, back.deg);
+      // sits left of centre on the card, since the prize card overlaps its right edge
+      return inQuestion(lx / qg + 12 + 3.4, ly / qg + 12);
+    },
+  });
+
+  // the prize card, with the crown
   shapes.push({ test: (x, y) => inCard(x, y, front.x, front.y, cardW + lip * 2, cardH + lip * 2, radius + lip, front.deg), c: OUTLINE });
   shapes.push({ test: (x, y) => inCard(x, y, front.x, front.y, cardW, cardH, radius, front.deg), c: GOLD });
+  const cg = cardW * 0.70 / 24;
+  shapes.push({
+    c: INK,
+    test: (x, y) => {
+      const [lx, ly] = toLocal(x, y, front.x, front.y, front.deg);
+      const gx = lx / cg + 12, gy = ly / cg + 11.2;
+      return inPoly(gx, gy, CROWN) || inBar(gx, gy, 12, 20.9, 19.2, 2.6, 0);
+    },
+  });
 
   const out = Buffer.alloc(S * S * 4);
   const SS = 3;                     // supersampling, so the edges are not jagged

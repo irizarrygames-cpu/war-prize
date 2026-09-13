@@ -271,60 +271,83 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   color: var(--dim);
 }
 
-/* ---- the logo lockup ----
-   A crest over the wordmark: the two cards you choose between, the prize they are
-   played for, the coins that come with it. The crest is drawn as one SVG (see
-   LOGO_CREST) rather than an image file, so it stays sharp at any size and carries no
-   download; the words stay real text so they keep the game's face and stay selectable.
+/* The logo was two words in a stroke, stacked. Readable, and completely without
+   character. It is built out of the game's own furniture now: PRIZE sits on the gold
+   card you spend the whole match fighting over, and the two words lean against each
+   other the way a pair of dealt cards do. Everything below is a flat shape with a
+   hard outline -- no gradients, nothing blurred.
 
-   Everything is sized in em off .logo, so the crest and the words scale together as
-   one piece from a short phone to a desktop. */
-.logo-lockup {
-  position: relative;
-  z-index: 1;
+   Sized in em throughout so the whole assembly scales as one thing: the same rules
+   have to hold at 34px on a short phone and 84px on a desktop. */
+.logo {
+  /* Scales on height as well as width -- on a short laptop window the old
+     width-only rule kept a 84px logo and ate the room the nav needed. */
+  font-size: clamp(34px, min(9vw, 9vh), 84px);
+  font-weight: 900;
+  line-height: 0.82;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.06em;
-  font-size: clamp(30px, min(7.6vw, 7.2vh), 66px);
+  /* The tilts below push the corners out past the text box. */
+  padding: 0.1em 0.14em 0.16em;
 }
 
-.logo-crest { width: 3.7em; line-height: 0; }
-
-/* The title screen has one job and room to do it. The menu also carries the player,
-   the arena, three modes, PLAY and two rows of nav, so the lockup runs smaller there
-   -- at title-screen size it pushed the rules text off the bottom of the window, and
-   body is overflow:hidden so it did not scroll, it just vanished. */
-#menuScreen .logo-lockup { font-size: clamp(25px, min(7.4vw, 4.7vh), 50px); }
-
-/* Shorter still and the crest steps aside. The wordmark on its own already says what
-   the game is, and the game itself needs the room more than the picture does. */
-@media (max-height: 640px) {
-  #menuScreen .logo-crest { display: none; }
-}
-/* The question mark is real text so it uses the game's own face, like the words do. */
-.crest-q { font-family: inherit; font-weight: 900; font-size: 58px; }
-.crest-svg { width: 100%; height: auto; display: block; overflow: visible; }
-
-/* The words, side by side. A thick stroke on each letter merges where letters meet,
-   which is what gives the whole word one continuous sticker edge rather than an
-   outline drawn round every character separately. */
-.logo {
-  display: flex;
-  align-items: baseline;
-  gap: 0.1em;
-  font-size: 1em;
-  font-weight: 900;
-  line-height: 1;
-  letter-spacing: 0.01em;
-  -webkit-text-stroke: 0.13em var(--outline);
+.lg-war {
+  display: block;
+  color: #fff;
+  letter-spacing: 0.09em;
+  /* letter-spacing puts a gap after the last letter too, which throws the centring
+     off by half a space. Nudging by the same amount puts it back. */
+  text-indent: 0.09em;
+  -webkit-text-stroke: 0.075em var(--outline);
   paint-order: stroke fill;
-  text-shadow: 0 0.06em 0 var(--outline);
-  margin: 0;
+  text-shadow: 0 0.09em 0 var(--outline);
+  transform: rotate(-3deg);
 }
 
-.lg-war { color: #fff; }
-.lg-prize { color: var(--gold); }
+/* The prize card, with the word on it -- and a second card behind, because the pot
+   is what you are actually playing for.
+
+   Both cards are pseudo-elements and the element itself has no background. That is
+   not fussiness: .lg-prize is rotated, a transform creates a stacking context, and a
+   child with a negative z-index cannot get behind its parent's OWN background -- so
+   the first version painted the back card on top of the front one. With no background
+   to fight, -2 and -1 stack correctly and both sit under the text. */
+.lg-prize {
+  display: block;
+  position: relative;
+  margin-top: 0.2em;
+  padding: 0.1em 0.32em 0.14em;
+  font-size: 0.78em;
+  letter-spacing: 0.12em;
+  text-indent: 0.12em;
+  color: #3a2400;
+  transform: rotate(2.2deg);
+}
+
+.lg-prize::before,
+.lg-prize::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border: 0.08em solid var(--outline);
+  border-radius: 0.16em;
+}
+
+/* the one underneath, fanned out to the left */
+.lg-prize::before {
+  z-index: -2;
+  background: var(--gold-dk);
+  transform: rotate(-7deg) translate(-0.09em, 0.03em);
+}
+
+/* the one you are looking at */
+.lg-prize::after {
+  z-index: -1;
+  background: var(--gold);
+  box-shadow: 0.03em 0.11em 0 var(--outline);
+}
 
 .avatar {
   width: 46px; height: 46px;
@@ -620,13 +643,11 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
 /* Both need a layer of their own: the scenery behind them is positioned, and a
    positioned element paints over static siblings whatever the source order says --
    without this a backyard tree sat on top of the username field. */
-/* The title screen has room the menu does not, so the lockup runs bigger there. */
-.auth-lockup { font-size: clamp(34px, 12.5vw, 60px); }
+.auth-logo { font-size: clamp(42px, 11vw, 68px); position: relative; z-index: 1; }
 
 /* A short window has to fit the logo AND the sign-in box, and the box wins. */
 @media (max-height: 700px) {
-  .auth-lockup { font-size: clamp(24px, 6.5vw, 38px); }
-  .auth-lockup .logo-crest { width: 3.2em; }
+  .auth-logo { font-size: clamp(34px, 8vw, 48px); }
 }
 
 .auth-box {
