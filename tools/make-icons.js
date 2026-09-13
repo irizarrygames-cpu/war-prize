@@ -95,6 +95,15 @@ function inBar(lx, ly, cx, cy, w, h, deg) {
 const inEllipse = (x, y, cx, cy, rx, ry) =>
   ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1;
 
+// The coins in the reference are tipped, not face on, so they need a turn as well.
+function inTilted(x, y, cx, cy, rx, ry, deg) {
+  const a = -deg * Math.PI / 180;
+  const dx = x - cx, dy = y - cy;
+  const u = dx * Math.cos(a) - dy * Math.sin(a);
+  const v = dx * Math.sin(a) + dy * Math.cos(a);
+  return (u / rx) ** 2 + (v / ry) ** 2 <= 1;
+}
+
 // A rounded rectangle given by its corners rather than a centre -- the crest was laid
 // out in SVG, where everything is x/y/width/height.
 function inBox(x, y, x0, y0, x1, y1, r) {
@@ -209,30 +218,32 @@ function crestShapes(push, S, box, cx, cy) {
         || inBox(u, v, 126, 71, 166, 80, 3);
   });
 
-  // --- coins, out wide ---
-  for (const coinX of [56, 184]) {
-    ink((x, y) => { const [u, v] = U(x, y); return inEllipse(u, v, coinX, 138, 25, 25); });
-    fill(GOLD, (x, y) => { const [u, v] = U(x, y); return inEllipse(u, v, coinX, 138, 20, 20); });
-    fill(GOLD_DK, (x, y) => { const [u, v] = U(x, y); return inEllipse(u, v, coinX, 138, 9, 9); });
+  // --- coins, out wide, tipped the way they are in the reference ---
+  for (const [coinX, tilt] of [[46, -20], [194, 20]]) {
+    ink((x, y) => { const [u, v] = U(x, y); return inTilted(u, v, coinX, 140, 27, 21, tilt); });
+    // the rim: a darker disc, offset down, with the bright face sitting on top of it
+    fill(GOLD_DK, (x, y) => { const [u, v] = U(x, y); return inTilted(u, v, coinX, 143, 22, 16, tilt); });
+    fill(GOLD, (x, y) => { const [u, v] = U(x, y); return inTilted(u, v, coinX, 138, 22, 16, tilt); });
+    fill(GOLD_DK, (x, y) => { const [u, v] = U(x, y); return inTilted(u, v, coinX, 138, 9, 7, tilt); });
   }
 
   // --- the trophy, across the bottom of the cards ---
   // cup is a straight-sided box down to the shoulder, then a bowl; handles are ring
   // segments either side; then the stem and the foot.
-  const cup = (u, v, g) => inBox(u, v, 94 - g, 91 - g, 146 + g, 110, 4)
-                        || (v >= 110 && inEllipse(u, v, 120, 110, 26 + g, 24 + g));
+  const cup = (u, v, g) => inBox(u, v, 92 - g, 86 - g, 148 + g, 104, 4)
+                        || (v >= 104 && inEllipse(u, v, 120, 104, 28 + g, 27 + g));
   const handle = (u, v, hx, side, g) => {
-    const d = Math.hypot(u - hx, v - 102);
-    const inRing = d <= 16 + g && d >= 8 - g;
+    const d = Math.hypot(u - hx, v - 100);
+    const inRing = d <= 15 + g && d >= 8.5 - g;
     return inRing && (side < 0 ? u <= hx : u >= hx);
   };
-  const stem = (u, v, g) => inBox(u, v, 112 - g, 128 - g, 128 + g, 150 + g, 4);
-  const foot = (u, v, g) => inBox(u, v, 94 - g, 147 - g, 146 + g, 163 + g, 7);
+  const stem = (u, v, g) => inBox(u, v, 113 - g, 128 - g, 127 + g, 150 + g, 4);
+  const foot = (u, v, g) => inBox(u, v, 98 - g, 149 - g, 142 + g, 164 + g, 7);
 
   ink((x, y) => { const [u, v] = U(x, y);
-    return cup(u, v, 5) || handle(u, v, 94, -1, 5) || handle(u, v, 146, 1, 5) || stem(u, v, 5) || foot(u, v, 5); });
+    return cup(u, v, 5) || handle(u, v, 92, -1, 5) || handle(u, v, 148, 1, 5) || stem(u, v, 5) || foot(u, v, 5); });
   fill(GOLD, (x, y) => { const [u, v] = U(x, y);
-    return cup(u, v, 0) || handle(u, v, 94, -1, 0) || handle(u, v, 146, 1, 0) || stem(u, v, 0) || foot(u, v, 0); });
+    return cup(u, v, 0) || handle(u, v, 92, -1, 0) || handle(u, v, 148, 1, 0) || stem(u, v, 0) || foot(u, v, 0); });
 }
 
 function render(size, inset) {
@@ -246,10 +257,7 @@ function render(size, inset) {
   const shapes = [];
   const push = (c, test) => shapes.push({ c, test });
 
-  // Faint burst, so the square is not flat behind the crest.
-  for (let i = 0; i < 20; i += 2) {
-    push(NAVY_2, (x, y) => inRay(x, y, cx, cy, i * 18, 18));
-  }
+  // Flat navy behind it. The reference has no burst and adding one was mine, not his.
   crestShapes(push, S, box, cx, cy);
 
   const out = Buffer.alloc(S * S * 4);
