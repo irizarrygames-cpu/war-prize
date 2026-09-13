@@ -373,10 +373,11 @@ const TUTORIAL = (() => {
         c.querySelector('.card-num').textContent = '2';
         c.classList.add('flipped');
         wrap.querySelector('.hand-tag').textContent = 'SEEN';
-        wrap.querySelector('.hand-tag').classList.add('known');
+        wrap.querySelector('.hand-tag').classList.add('seen');
+        wrap.classList.add('peeking');
         const cc = FX.centreOf(c);
         FX.ring(cc.x, cc.y, { size: 150, color: PEEK_COLOR, life: 460, thick: 6 });
-        await wait(240);
+        await wait(120);
         FX.floatText(cc.x, cc.y - 60, '2', 'cool');
         SFX.peekReveal(2);
         await wait(700);

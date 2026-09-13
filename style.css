@@ -1531,8 +1531,20 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   transition: transform 0.12s;
 }
 .hand-card .card { width: 74px; height: 106px; }
-.hand-card:hover { transform: translateY(-10px); }
-.hand-card:hover .card-face,
+/* Hover is a mouse idea, and it used to share this exact ring and lift with .chosen.
+   On a phone there is no hover -- a tap leaves :hover stuck on whatever you touched,
+   so peeking at your own card left it lifted and ringed in gold and looked for all
+   the world like you had just played it. Only pointers that really hover get it. */
+@media (hover: hover) and (pointer: fine) {
+  .hand-card:hover { transform: translateY(-10px); }
+  .hand-card:hover .card-face { box-shadow: 0 0 0 4px var(--gold), 0 5px 0 4px var(--outline); }
+}
+
+/* A peeked card is revealed, not chosen. Gold means "this is your pick" everywhere
+   else in the game, which is why peeking has a colour of its own. */
+.hand-card.peeking .card-face { box-shadow: 0 0 0 4px var(--peek), 0 5px 0 4px var(--outline); }
+
+/* Last, so that actually picking a card always wins over merely having looked at it. */
 .hand-card.chosen .card-face { box-shadow: 0 0 0 4px var(--gold), 0 5px 0 4px var(--outline); }
 .hand-card.chosen { transform: translateY(-10px); }
 .hand-card.faded { opacity: 0.3; pointer-events: none; }
@@ -1548,6 +1560,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   border: 3px solid var(--outline);
 }
 .hand-tag.known { background: var(--gold); color: #3a2400; }
+.hand-tag.seen { background: var(--peek); color: var(--peek-ink); }
 
 /* peek */
 .peek-btn {
@@ -1585,7 +1598,9 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
 }
 
 /* the card gets lifted at its corner and a hand slides under to look */
-.hand-card.peeking .card { animation: peekLift 0.85s cubic-bezier(0.3, 1.3, 0.5, 1); }
+/* Halved. The number is readable the instant the card tips, and the old 0.85s was
+   eating a quarter of the time you had to make up your mind. */
+.hand-card.peeking .card { animation: peekLift 0.45s cubic-bezier(0.3, 1.3, 0.5, 1); }
 .hand-card.peeking .card-inner { transform: rotateY(180deg); }
 
 .peek-hand {
@@ -1595,10 +1610,8 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   font-size: 34px;
   pointer-events: none;
   z-index: 6;
-  animation: peekHand 1.1s ease-out forwards;
+  animation: peekHand 0.56s ease-out forwards;
 }
-
-.hand-tag.known { background: var(--gold); color: #3a2400; }
 
 #selectBarTrack {
   width: 220px; height: 12px;

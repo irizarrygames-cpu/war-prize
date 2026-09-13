@@ -9,7 +9,10 @@ const el = (tag, cls, html) => {
 };
 
 const PEEK_COLOR = '#b06bff';   // matches --peek in the stylesheet
-const SELECT_MS = 3600;
+// Fallback only. The real number comes from the server on every round, because two
+// copies of the same constant is two numbers that can drift, and this one drives the
+// draining bar that tells you how long you have left.
+const SELECT_MS = 5000;
 const BEAT_MS = 420;
 const REVEAL_MS = 620;
 const RESOLVE_MS = 1300;
@@ -877,16 +880,18 @@ function showSelfPeek(card) {
   wrap.appendChild(hand);
   wrap.classList.add('peeking');
   SFX.peek();
-  setTimeout(() => hand.remove(), 1100);
+  setTimeout(() => hand.remove(), 560);
+  // 'seen', not 'known': the KNOWN tag is gold, and gold is what the game uses for
+  // the card you have committed to. Wearing it made a peek look like a pick.
   wrap.querySelector('.hand-tag').textContent = 'SEEN';
-  wrap.querySelector('.hand-tag').classList.add('known');
+  wrap.querySelector('.hand-tag').classList.add('seen');
 
   const c = FX.centreOf(cardEl);
   FX.ring(c.x, c.y, { size: 150, color: PEEK_COLOR, life: 460, thick: 6 });
   setTimeout(() => {
     FX.floatText(c.x, c.y - 60, String(card), 'cool');
     SFX.peekReveal(card);
-  }, 240);
+  }, 120);
 }
 
 // What you learned about them stays on their seat for the rest of the round, because
@@ -911,7 +916,7 @@ function showOpponentPeek(localIndex, card) {
   setTimeout(() => {
     FX.floatText(c.x, c.y - 44, String(card), 'cool');
     SFX.peekReveal(card);
-  }, 240);
+  }, 120);
 }
 
 function usePeek() {
@@ -923,30 +928,38 @@ function usePeek() {
 
 $('peekBtn').onclick = usePeek;
 
-function startSelectBar() {
+function startSelectBar(ms) {
   const bar = $('selectBar');
   bar.style.transition = 'none';
   bar.style.width = '100%';
   void bar.offsetWidth;
-  bar.style.transition = `width ${SELECT_MS}ms linear`;
+  bar.style.transition = `width ${ms || SELECT_MS}ms linear`;
   bar.style.width = '0%';
 }
 
 // Only ever called for you. The server owns every other seat and reveals your card.
 function commitPick(player, index) {
   if (player.pick !== null || player.id !== 0) return;
-  player.pick = index;
-  player.card = null;
   netPick(index);
-
   SFX.whoosh();
   SFX.select();
+  showPick(player, index);
+}
+
+// The part that only moves things on screen. Split out because the server also picks
+// for you when the clock runs out, and that path used to change the label to LOCKED IN
+// without marking either card -- so the hand sat there looking undecided underneath a
+// heading saying it was decided.
+function showPick(player, index) {
+  player.pick = index;
+  player.card = null;
   const cards = $('handCards').children;
   if (cards[index]) cards[index].classList.add('chosen');
   if (cards[1 - index]) cards[1 - index].classList.add('faded');
   $('selectBar').style.transition = 'none';
   $('selectBar').style.width = '0%';
   player.seat.classList.add('ready');
+  setPeekMode(false);
   renderPeekButton();                     // locked in, so no more peeking this round
 }
 

@@ -126,7 +126,7 @@ function handleServerEvent(d) {
     case 'picked':        onlineOpponentPicked(d); break;
     case 'peeked':        onlineOpponentPeeked(d); break;
     case 'reaction':      onlineOpponentReacted(d); break;
-    case 'countdown':     onlineCountdown(); break;
+    case 'countdown':     onlineCountdown(d); break;
     case 'reveal':        onlineReveal(d); break;
     case 'sudden-death':  onlineSuddenDeath(d); break;
     case 'match-end':     onlineMatchEnd(d); break;
@@ -479,7 +479,7 @@ function onlineRound(d) {
   document.querySelectorAll('.seat-known').forEach(t => t.remove());
   setPeekMode(false);
   renderHand();
-  if (!d.spectating) startSelectBar();
+  if (!d.spectating) startSelectBar(d.selectMs);
 }
 
 function onlineOpponentPicked(d) {
@@ -517,9 +517,20 @@ function onlineSuddenDeath(d) {
   setTimeout(() => sd.classList.add('hidden'), 2200);
 }
 
-function onlineCountdown() {
+function onlineCountdown(d) {
   if (!M || !M.online) return;
   M.phase = 'count';
+
+  // If the clock beat us to it the server chose, and it says which. Show that card as
+  // the pick before announcing anything -- otherwise the label claims you are locked
+  // in while both cards still sit there looking untouched.
+  const me = M.players[0];
+  const inRound = activePlayers().includes(me);
+  if (inRound && me && me.pick === null && d && typeof d.yourPick === 'number') {
+    showPick(me, d.yourPick);
+    if (d.forced) toast('Out of time — played your ' + (d.yourPick === 0 ? 'known' : 'gamble') + ' card');
+  }
+
   $('handLabel').textContent = 'LOCKED IN';
   const ct = $('centerText');
   ['3', '2', '1'].forEach((n, i) => {

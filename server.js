@@ -14,14 +14,23 @@ const { screenUsername } = require('./moderation');
 
 const PORT = Number(process.argv[2] || process.env.PORT || 8421);
 // Bumped whenever something worth verifying from outside ships. /api/health reports it.
-const BUILD = 20;
+const BUILD = 21;
 const ROOT = __dirname;
 const DATA_FILE = path.join(ROOT, 'data.json');
 
 const CARD_MIN = 1, CARD_MAX = 10;
 const KNOWN_LOW_CHANCE = 0.65, KNOWN_LOW_MAX = 5;
 const MATCH_SECONDS = 60;
-const SELECT_MS = 3600, BEAT_MS = 420, REVEAL_MS = 620, RESOLVE_MS = 1300;
+// How long you get to choose. It was 3600ms, which was fine when a peek was a rare
+// thing you got once a match -- but peeks are three a round now, and the animation for
+// a single one used to eat a third of the window. Three of them did not fit at all, so
+// the clock ran out mid-peek, the server chose for you, and the screen said LOCKED IN
+// while you were still looking at the card. 5000 leaves room for all three and a
+// decision afterwards, and costs nothing when nobody needs it: beginCountdown fires
+// the moment every active player has picked, so this is a ceiling, not a duration. I
+// expected to lose about two rounds a match and measured none -- a 60-second match
+// still ran 12 rounds with all three peeks spent in every one of them.
+const SELECT_MS = 5000, BEAT_MS = 420, REVEAL_MS = 620, RESOLVE_MS = 1300;
 const PBKDF2_ITERATIONS = 150000;
 const QUEUE_WAIT_MS = 30000;   // hunt for real players this long, then fill with bots
 // Peek charges. Three of them, every card costs one, and they come back at the top
@@ -654,6 +663,7 @@ function beginRound(m) {
   active.forEach(i => {
     const p = m.players[i];
     p.pick = null;
+    p.forced = false;
     p.peeked = false;
     p.peeks = PEEKS_PER_ROUND;   // a fresh set every round, not three for the match
     p.seen = {};                 // fresh cards, so last round's peeks mean nothing
@@ -670,6 +680,9 @@ function beginRound(m) {
       pot: m.pot,
       peeks: p.peeks,
       peekCosts: { self: PEEK_COST, opponent: PEEK_COST },
+      selectMs: SELECT_MS,         // the client drew its timer bar from its own copy of
+                                   // this number, which could drift from the real one
+
       sudden: m.sudden,
       msLeft: Math.max(0, m.endsAt - Date.now()),
     });
@@ -704,7 +717,13 @@ function beginRound(m) {
   later(m, () => {
     active.forEach(i => {
       const p = m.players[i];
-      if (p.pick === null) p.pick = p.candidates[0] <= p.candidates[1] ? 0 : 1;
+      if (p.pick !== null) return;
+      p.pick = p.candidates[0] <= p.candidates[1] ? 0 : 1;
+      p.forced = true;                     // so the client can say so rather than just
+                                           // announcing LOCKED IN with nothing to show
+      // Everyone else is told a pick happened, exactly as if it had been tapped --
+      // this path set p.pick directly and skipped the notice entirely.
+      m.players.forEach(x => { if (x.id) push(x.id, 'picked', { seat: i }); });
     });
     beginCountdown(m);
   }, SELECT_MS);
@@ -741,7 +760,18 @@ function beginCountdown(m) {
   if (m.over || m.phase === 'count') return;
   m.phase = 'count';
   clearMatchTimers(m);
-  m.players.forEach(p => { if (p.id) push(p.id, 'countdown', { beat: BEAT_MS }); });
+  // yourPick is that player's own card, so telling them is not a leak -- and without
+  // it a client whose clock ran out has no idea which of the two it is about to play.
+  const active = activeIdx(m);
+  m.players.forEach((p, i) => {
+    if (!p.id) return;
+    const playing = active.includes(i);
+    push(p.id, 'countdown', {
+      beat: BEAT_MS,
+      yourPick: playing ? p.pick : null,
+      forced: playing && !!p.forced,
+    });
+  });
   later(m, () => resolveRound(m), BEAT_MS * 3 + REVEAL_MS);
 }
 
