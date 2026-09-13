@@ -91,6 +91,16 @@ function inBar(lx, ly, cx, cy, w, h, deg) {
   return Math.abs(px) <= w / 2 && Math.abs(py) <= h / 2;
 }
 
+// Point in an arbitrary polygon, by ray casting. The crown is one.
+function inPoly(px, py, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
 // One wedge of the sunburst behind the cards.
 function inRay(x, y, cx, cy, fromDeg, widthDeg) {
   const a = Math.atan2(y - cy, x - cx) * 180 / Math.PI;
@@ -112,40 +122,38 @@ function render(size, inset) {
   const box = S - pad * 2;
   const cx = S / 2, cy = S / 2;
 
-  const cardW = box * 0.44, cardH = box * 0.62, radius = box * 0.07;
-  const lip = box * 0.055;          // thickness of the dark outline
+  // One card carries the icon and the other is just depth behind it. The previous
+  // version gave two cards equal weight, stacked a number on top and put a sunburst
+  // behind the lot -- four things competing inside 48 pixels, which is why it read as
+  // clutter. One subject, one supporting shape, nothing else.
+  const cardW = box * 0.50, cardH = box * 0.70, radius = box * 0.08;
+  const lip = box * 0.058;
 
-  // The two cards of the actual decision: one you can see, one you cannot. The gold
-  // one carries a 7 so the icon says "numbers" at a glance -- at 48 pixels on a home
-  // screen two blank rectangles could be anything.
-  const backX = cx - box * 0.15, backY = cy - box * 0.015, backDeg = -15;
-  const frontX = cx + box * 0.13, frontY = cy + box * 0.03, frontDeg = 12;
+  const backX = cx - box * 0.17, backY = cy - box * 0.01, backDeg = -16;
+  const frontX = cx + box * 0.055, frontY = cy + box * 0.015, frontDeg = 8;
 
   const shapes = [];
 
-  // Sunburst, one shade off the background. A pattern, never a glow.
-  for (let i = 0; i < 20; i += 2) {
-    shapes.push({ test: (x, y) => inRay(x, y, cx, cy, i * 18, 18), c: NAVY_2 });
-  }
-
-  // back card, tilted left -- face down, so it stays blank
+  // the card behind: face down, blank, just enough of it showing to read as a second
   shapes.push({ test: (x, y) => inCard(x, y, backX, backY, cardW + lip * 2, cardH + lip * 2, radius + lip, backDeg), c: OUTLINE });
   shapes.push({ test: (x, y) => inCard(x, y, backX, backY, cardW, cardH, radius, backDeg), c: WHITE });
 
-  // front card, tilted right, with the number on it
+  // the prize card
   shapes.push({ test: (x, y) => inCard(x, y, frontX, frontY, cardW + lip * 2, cardH + lip * 2, radius + lip, frontDeg), c: OUTLINE });
   shapes.push({ test: (x, y) => inCard(x, y, frontX, frontY, cardW, cardH, radius, frontDeg), c: GOLD });
 
-  // A 7, built from its two strokes in the card's own frame. Deliberately huge and
-  // thick: a numeral drawn at a sensible weight disappears at icon sizes.
-  const bar = cardW * 0.20;                       // stroke thickness
+  // A crown on it, which is what the whole game is about: this is the card you win.
+  // The same shape the royal card back uses, on the game's own 24-unit grid, drawn in
+  // the card's frame so it leans with the card.
+  const CROWN = [[2.4, 7.4], [7, 12], [12, 3.4], [17, 12], [21.6, 7.4], [21.6, 18.8], [2.4, 18.8]];
+  const g = cardW * 0.78 / 24;                    // grid units to pixels
   shapes.push({
     c: INK,
     test: (x, y) => {
       const [lx, ly] = toLocal(x, y, frontX, frontY, frontDeg);
-      const top = inBar(lx, ly, 0, -cardH * 0.21, cardW * 0.52, bar, 0);
-      const leg = inBar(lx, ly, cardW * 0.12, cardH * 0.10, bar, cardH * 0.48, 22);
-      return top || leg;
+      // centre the 24x24 grid on the card, nudged up so the band below sits inside it
+      const gx = lx / g + 12, gy = ly / g + 11.2;
+      return inPoly(gx, gy, CROWN) || inBar(gx, gy, 12, 20.9, 19.2, 2.6, 0);
     },
   });
 
@@ -153,18 +161,18 @@ function render(size, inset) {
   const SS = 3;                     // supersampling, so the edges are not jagged
   for (let y = 0; y < S; y++) {
     for (let x = 0; x < S; x++) {
-      let r = 0, g = 0, b = 0;
+      let r = 0, gg = 0, b = 0;
       for (let sy = 0; sy < SS; sy++) {
         for (let sx = 0; sx < SS; sx++) {
           const px = x + (sx + 0.5) / SS, py = y + (sy + 0.5) / SS;
           let col = NAVY;
           for (const sh of shapes) if (sh.test(px, py)) col = sh.c;
-          r += col[0]; g += col[1]; b += col[2];
+          r += col[0]; gg += col[1]; b += col[2];
         }
       }
       const n = SS * SS, i = (y * S + x) * 4;
       out[i] = Math.round(r / n);
-      out[i + 1] = Math.round(g / n);
+      out[i + 1] = Math.round(gg / n);
       out[i + 2] = Math.round(b / n);
       out[i + 3] = 255;
     }
