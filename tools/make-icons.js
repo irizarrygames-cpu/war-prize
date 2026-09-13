@@ -92,6 +92,28 @@ function inBar(lx, ly, cx, cy, w, h, deg) {
   return Math.abs(px) <= w / 2 && Math.abs(py) <= h / 2;
 }
 
+const inEllipse = (x, y, cx, cy, rx, ry) =>
+  ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1;
+
+// A rounded rectangle given by its corners rather than a centre -- the crest was laid
+// out in SVG, where everything is x/y/width/height.
+function inBox(x, y, x0, y0, x1, y1, r) {
+  if (x < x0 || x > x1 || y < y0 || y > y1) return false;
+  const ax = Math.min(x - x0, x1 - x), ay = Math.min(y - y0, y1 - y);
+  if (ax >= r || ay >= r) return true;
+  return (r - ax) ** 2 + (r - ay) ** 2 <= r * r;
+}
+
+// A line with round ends -- the emphasis dashes.
+function inDash(x, y, ax, ay, bx, by, w) {
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  let t = ((x - ax) * dx + (y - ay) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  const px = ax + t * dx, py = ay + t * dy;
+  return (x - px) ** 2 + (y - py) ** 2 <= (w / 2) ** 2;
+}
+
 // Point in an arbitrary polygon, by ray casting. The crown is one.
 function inPoly(px, py, pts) {
   let inside = false;
@@ -114,28 +136,103 @@ const NAVY_2 = hex('#232c41');
 const INK = hex('#3a2400');      // the brown the game uses for text on gold
 const ORANGE = hex('#ff6b2c');   // the streak colour -- the game's hot end
 const EMBER  = hex('#272a35');   // burst rays: barely there, just enough to not be flat
-const GREY = hex('#b9c4d4');    // the question mark, so it reads as printed on the card
+const GREY = hex('#b9c4d4');
+const GOLD_DK = hex('#c98f00');    // the question mark, so it reads as printed on the card
 const GOLD = hex('#ffc93c');
 const WHITE = hex('#fdfdff');
 
 // The crown, on its own 24-unit grid so it can be dropped onto a card at any size.
 const CROWN = [[2.4, 7.4], [7, 12], [12, 3.4], [17, 12], [21.6, 7.4], [21.6, 18.8], [2.4, 18.8]];
 
-// A question mark, drawn rather than typed: no font rendering in here, and a glyph
-// would be at the mercy of whatever face the machine building this happens to have.
-// Hook, then the dot. Same 24-unit grid as the crown.
+// A question mark, drawn rather than typed: there is no font rendering in here, and a
+// glyph would be at the mercy of whichever face the build machine happens to have.
+// Hook, stem, dot, on the same 24-unit grid.
 function inQuestion(gx, gy) {
   const d2 = (ax, ay) => (gx - ax) * (gx - ax) + (gy - ay) * (gy - ay);
-  // the ring of the hook, upper half and right side only
-  const ringOuter = 7.4, ringInner = 3.9;
   const r2 = d2(12, 8.4);
-  const onRing = r2 <= ringOuter * ringOuter && r2 >= ringInner * ringInner;
-  if (onRing && (gy <= 8.4 || gx >= 12)) return true;
-  // the stem dropping from the ring down to the dot
+  if (r2 <= 7.4 * 7.4 && r2 >= 3.9 * 3.9 && (gy <= 8.4 || gx >= 12)) return true;
   if (gx >= 10.2 && gx <= 13.8 && gy >= 12.5 && gy <= 17.4) return true;
-  // the dot
-  if (d2(12, 20.6) <= 2.5 * 2.5) return true;
-  return false;
+  return d2(12, 20.6) <= 2.5 * 2.5;
+}
+
+/* The whole crest, in the same 240x176 space the in-game logo版 was laid out in:
+   both cards, the trophy across their base, a coin either side, and the dashes. */
+const CREST = { x0: 6, x1: 234, cy: 88 };
+
+function crestShapes(push, S, box, cx, cy) {
+  const k = box / (CREST.x1 - CREST.x0);          // crest units -> pixels
+  const ox = cx - box / 2;
+  const P = (u, v) => [ox + (u - CREST.x0) * k, cy + (v - CREST.cy) * k];
+  // icon pixel -> crest units, which is what every test below works in
+  const U = (x, y) => [CREST.x0 + (x - ox) / k, CREST.cy + (y - cy) / k];
+
+  const ink = (test) => push(OUTLINE, test);
+  const fill = (c, test) => push(c, test);
+
+  // --- emphasis dashes ---
+  const DASHES = [
+    [18, 54, 44, 62], [12, 78, 40, 79], [18, 102, 44, 95],
+    [222, 54, 196, 62], [228, 78, 200, 79], [222, 102, 196, 95],
+  ];
+  for (const [ax, ay, bx, by] of DASHES) {
+    fill(GOLD, (x, y) => { const [u, v] = U(x, y); return inDash(u, v, ax, ay, bx, by, 13); });
+  }
+
+  // --- the card you cannot see ---
+  const backDeg = -12, backCx = 95, backCy = 63;
+  const backLocal = (x, y) => {
+    const [u, v] = U(x, y);
+    const a = backDeg * Math.PI / 180;
+    const dx = u - backCx, dy = v - backCy;
+    return [backCx + dx * Math.cos(a) + dy * Math.sin(a), backCy - dx * Math.sin(a) + dy * Math.cos(a)];
+  };
+  ink((x, y) => { const [u, v] = backLocal(x, y); return inBox(u, v, 61, 11, 129, 115, 14); });
+  fill(WHITE, (x, y) => { const [u, v] = backLocal(x, y); return inBox(u, v, 66, 16, 124, 110, 9); });
+  fill(GREY, (x, y) => {
+    const [u, v] = backLocal(x, y);
+    return inQuestion((u - 95) / 2.1 + 12, (v - 62) / 2.1 + 12);
+  });
+
+  // --- the prize card ---
+  const frontDeg = 10, frontCx = 146, frontCy = 60;
+  const frontLocal = (x, y) => {
+    const [u, v] = U(x, y);
+    const a = frontDeg * Math.PI / 180;
+    const dx = u - frontCx, dy = v - frontCy;
+    return [frontCx + dx * Math.cos(a) + dy * Math.sin(a), frontCy - dx * Math.sin(a) + dy * Math.cos(a)];
+  };
+  ink((x, y) => { const [u, v] = frontLocal(x, y); return inBox(u, v, 111, 7, 181, 113, 14); });
+  fill(GOLD, (x, y) => { const [u, v] = frontLocal(x, y); return inBox(u, v, 116, 12, 176, 108, 9); });
+  fill(INK, (x, y) => {
+    const [u, v] = frontLocal(x, y);
+    return inPoly(u, v, [[126, 44], [135, 54], [146, 30], [157, 54], [166, 44], [166, 66], [126, 66]])
+        || inBox(u, v, 126, 71, 166, 80, 3);
+  });
+
+  // --- coins, out wide ---
+  for (const coinX of [56, 184]) {
+    ink((x, y) => { const [u, v] = U(x, y); return inEllipse(u, v, coinX, 138, 25, 25); });
+    fill(GOLD, (x, y) => { const [u, v] = U(x, y); return inEllipse(u, v, coinX, 138, 20, 20); });
+    fill(GOLD_DK, (x, y) => { const [u, v] = U(x, y); return inEllipse(u, v, coinX, 138, 9, 9); });
+  }
+
+  // --- the trophy, across the bottom of the cards ---
+  // cup is a straight-sided box down to the shoulder, then a bowl; handles are ring
+  // segments either side; then the stem and the foot.
+  const cup = (u, v, g) => inBox(u, v, 94 - g, 91 - g, 146 + g, 110, 4)
+                        || (v >= 110 && inEllipse(u, v, 120, 110, 26 + g, 24 + g));
+  const handle = (u, v, hx, side, g) => {
+    const d = Math.hypot(u - hx, v - 102);
+    const inRing = d <= 16 + g && d >= 8 - g;
+    return inRing && (side < 0 ? u <= hx : u >= hx);
+  };
+  const stem = (u, v, g) => inBox(u, v, 112 - g, 128 - g, 128 + g, 150 + g, 4);
+  const foot = (u, v, g) => inBox(u, v, 94 - g, 147 - g, 146 + g, 163 + g, 7);
+
+  ink((x, y) => { const [u, v] = U(x, y);
+    return cup(u, v, 5) || handle(u, v, 94, -1, 5) || handle(u, v, 146, 1, 5) || stem(u, v, 5) || foot(u, v, 5); });
+  fill(GOLD, (x, y) => { const [u, v] = U(x, y);
+    return cup(u, v, 0) || handle(u, v, 94, -1, 0) || handle(u, v, 146, 1, 0) || stem(u, v, 0) || foot(u, v, 0); });
 }
 
 function render(size, inset) {
@@ -147,65 +244,13 @@ function render(size, inset) {
   const cx = S / 2, cy = S / 2;
 
   const shapes = [];
+  const push = (c, test) => shapes.push({ c, test });
 
-  // Faint burst, so the square is not flat behind the cards.
+  // Faint burst, so the square is not flat behind the crest.
   for (let i = 0; i < 20; i += 2) {
-    shapes.push({ test: (x, y) => inRay(x, y, cx, cy, i * 18, 18), c: NAVY_2 });
+    push(NAVY_2, (x, y) => inRay(x, y, cx, cy, i * 18, 18));
   }
-
-  // The two cards of the actual decision, fanned the way the logo has them: the one
-  // you cannot see, and the prize. The trophy and coins from the full lockup are left
-  // out on purpose -- six objects inside 48 pixels is a smudge, and these two are the
-  // ones that carry the game.
-  const cardW = box * 0.38, cardH = box * 0.54, radius = box * 0.065;
-  const lip = box * 0.046;
-
-  const back  = { x: cx - box * 0.145, y: cy - box * 0.01, deg: -15 };
-  const front = { x: cx + box * 0.125, y: cy + box * 0.015, deg: 12 };
-
-  // emphasis dashes, out beyond the cards
-  const dash = (ax, ay, bx, by) => ({
-    c: GOLD,
-    test: (x, y) => {
-      const mx = (ax + bx) / 2, my = (ay + by) / 2;
-      const dx = bx - ax, dy = by - ay;
-      const len = Math.hypot(dx, dy), deg = Math.atan2(dy, dx) * 180 / Math.PI;
-      return inBar(x, y, mx, my, len, box * 0.046, deg);
-    },
-  });
-  const dx0 = box * 0.485, dx1 = box * 0.39;
-  shapes.push(dash(cx - dx0, cy - box * 0.20, cx - dx1, cy - box * 0.14));
-  shapes.push(dash(cx - dx0 - box * 0.02, cy, cx - dx1, cy));
-  shapes.push(dash(cx - dx0, cy + box * 0.20, cx - dx1, cy + box * 0.14));
-  shapes.push(dash(cx + dx0, cy - box * 0.20, cx + dx1, cy - box * 0.14));
-  shapes.push(dash(cx + dx0 + box * 0.02, cy, cx + dx1, cy));
-  shapes.push(dash(cx + dx0, cy + box * 0.20, cx + dx1, cy + box * 0.14));
-
-  // the blind card, with a question mark on it
-  shapes.push({ test: (x, y) => inCard(x, y, back.x, back.y, cardW + lip * 2, cardH + lip * 2, radius + lip, back.deg), c: OUTLINE });
-  shapes.push({ test: (x, y) => inCard(x, y, back.x, back.y, cardW, cardH, radius, back.deg), c: WHITE });
-  const qg = cardW * 0.66 / 24;
-  shapes.push({
-    c: GREY,
-    test: (x, y) => {
-      const [lx, ly] = toLocal(x, y, back.x, back.y, back.deg);
-      // sits left of centre on the card, since the prize card overlaps its right edge
-      return inQuestion(lx / qg + 12 + 3.4, ly / qg + 12);
-    },
-  });
-
-  // the prize card, with the crown
-  shapes.push({ test: (x, y) => inCard(x, y, front.x, front.y, cardW + lip * 2, cardH + lip * 2, radius + lip, front.deg), c: OUTLINE });
-  shapes.push({ test: (x, y) => inCard(x, y, front.x, front.y, cardW, cardH, radius, front.deg), c: GOLD });
-  const cg = cardW * 0.70 / 24;
-  shapes.push({
-    c: INK,
-    test: (x, y) => {
-      const [lx, ly] = toLocal(x, y, front.x, front.y, front.deg);
-      const gx = lx / cg + 12, gy = ly / cg + 11.2;
-      return inPoly(gx, gy, CROWN) || inBar(gx, gy, 12, 20.9, 19.2, 2.6, 0);
-    },
-  });
+  crestShapes(push, S, box, cx, cy);
 
   const out = Buffer.alloc(S * S * 4);
   const SS = 3;                     // supersampling, so the edges are not jagged
