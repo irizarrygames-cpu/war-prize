@@ -57,6 +57,20 @@ const ICONS = {
 
   // a level badge
   level: '<path d="M12 1.8 15 8l6.8 1-4.9 4.8 1.2 6.8L12 17.4 5.9 20.6l1.2-6.8L2.2 9 9 8Z"/>',
+
+  // a phone with an arrow coming down into it -- putting the game on your home screen
+  install: '<path fill-rule="evenodd" d="M6.2 1.6h11.6a2.6 2.6 0 0 1 2.6 2.6v15.6a2.6 2.6 0 0 1-2.6 2.6H6.2a2.6 2.6 0 0 1-2.6-2.6V4.2a2.6 2.6 0 0 1 2.6-2.6Zm0 3.4v12.4h11.6V5Z"/>' +
+           '<rect x="10.6" y="6.4" width="2.8" height="6.2" rx="1.4"/>' +
+           '<path d="M12 16.2 7.9 11.4h8.2Z"/>',
+
+  // the iOS share box: a tray with an arrow lifting out of it. Drawn because that is
+  // the button people have to find on an iPhone, and describing it in words does not
+  // work -- "the square with the arrow" could be anything.
+  share: '<path d="M12 1.8 16.4 6.6h-3V14h-2.8V6.6h-3Z"/>' +
+         '<path fill-rule="evenodd" d="M4.6 9.4h3.8v2.8H6.2v8.2h11.6v-8.2h-2.2V9.4h3.8a1.8 1.8 0 0 1 1.8 1.8v9.8a1.8 1.8 0 0 1-1.8 1.8H4.6a1.8 1.8 0 0 1-1.8-1.8v-9.8a1.8 1.8 0 0 1 1.8-1.8Z"/>',
+
+  // a plus in a rounded square -- "Add to Home Screen" in the iOS share sheet
+  plusbox: '<path fill-rule="evenodd" d="M5 2.6h14a2.4 2.4 0 0 1 2.4 2.4v14a2.4 2.4 0 0 1-2.4 2.4H5A2.4 2.4 0 0 1 2.6 19V5A2.4 2.4 0 0 1 5 2.6Zm8.4 4.6h-2.8v3.4H7.2v2.8h3.4v3.4h2.8v-3.4h3.4v-2.8h-3.4Z"/>',
 };
 
 // Returns an <svg> string. Everything inherits currentColor, so an icon takes the

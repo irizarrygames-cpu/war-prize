@@ -92,6 +92,16 @@
     <button class="nav-btn" id="navChallenges"><span class="nav-ico" data-icon="daily"></span>Daily<div id="challengeDot" class="dot hidden"></div></button>
   </div>
 
+  <!-- Only ever shown when the browser says the game can actually be installed, and
+       only after a first match -- nagging someone to install a game they have not
+       played yet is how install prompts got their reputation. -->
+  <div id="installBar" class="install-bar hidden">
+    <span class="ib-ico" data-icon="install"></span>
+    <span class="ib-text">Add to Home Screen</span>
+    <button id="installGo" class="ib-go">INSTALL</button>
+    <button id="installNo" class="ib-no" title="Not now">&#10005;</button>
+  </div>
+
   <div class="menu-foot">Play the card you can see, or gamble on the hidden one &middot; matching numbers cancel &middot; highest unique wins</div>
 </div>
 
@@ -240,6 +250,20 @@
     <div class="confirm-actions">
       <button id="confirmNo" class="ghost-btn">Cancel</button>
       <button id="confirmYes" class="confirm-yes">Yes</button>
+    </div>
+  </div>
+</div>
+
+<!-- iOS has no install API and never has had one: Safari only offers Add to Home
+     Screen through its own share menu. So on an iPhone this is instructions, with the
+     buttons drawn, because "tap the square with the arrow" describes half the icons
+     on the screen. -->
+<div id="installWrap" class="hidden">
+  <div class="confirm-box install-box">
+    <div class="confirm-title">Put War Prize on your home screen</div>
+    <div id="installSteps" class="install-steps"></div>
+    <div class="confirm-actions">
+      <button id="installClose" class="confirm-yes">Got it</button>
     </div>
   </div>
 </div>

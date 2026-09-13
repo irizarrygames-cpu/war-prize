@@ -105,9 +105,129 @@ function toast(msg) {
 
 /* ---------------- menu ---------------- */
 
+/* ---------------- add to home screen ----------------
+   The game has been a proper PWA all along -- manifest, icons, a service worker --
+   so a phone can already install it. Nothing ever told anyone that.
+
+   Two browsers, two completely different jobs. Chrome and Edge fire
+   beforeinstallprompt when they decide a site is installable, and hand you an object
+   you can fire later from a tap; that is a real one-tap install. Safari has no such
+   event and no API at all -- Add to Home Screen lives in its share menu and only a
+   person can choose it -- so on iOS this shows how, and that is the best anyone can
+   do there. Everywhere else (a desktop Firefox, an in-app webview) neither applies
+   and the button simply never appears. */
+
+let installEvent = null;
+const INSTALL_DISMISS_KEY = 'warprize.installDismissed';
+
+function isStandalone() {
+  // Already installed: launched from the home screen rather than a browser tab.
+  return matchMedia('(display-mode: standalone)').matches
+      || matchMedia('(display-mode: fullscreen)').matches
+      || matchMedia('(display-mode: minimal-ui)').matches
+      || navigator.standalone === true;                 // the iOS way of saying it
+}
+
+function isIOS() {
+  const ua = navigator.userAgent;
+  // An iPad on iPadOS reports itself as a Mac, and the touch points are the giveaway.
+  return /iphone|ipad|ipod/i.test(ua)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+// iOS only offers Add to Home Screen from Safari itself. Inside Chrome or Firefox on
+// an iPhone, or an in-app webview, the share menu has no such item, so pointing at it
+// would be sending someone looking for a button that is not there.
+function isIOSSafari() {
+  return isIOS() && /safari/i.test(navigator.userAgent) && !/crios|fxios|edgios/i.test(navigator.userAgent);
+}
+
+function canInstall() {
+  if (isStandalone()) return false;
+  return !!installEvent || isIOSSafari();
+}
+
+function installDismissed() {
+  try { return localStorage.getItem(INSTALL_DISMISS_KEY) === '1'; } catch (e) { return false; }
+}
+
+// localStorage, not SAVE: whether you have installed the game is a fact about this
+// device, and SAVE follows the account to every other one.
+function dismissInstall() {
+  try { localStorage.setItem(INSTALL_DISMISS_KEY, '1'); } catch (e) { /* private mode */ }
+  $('installBar').classList.add('hidden');
+}
+
+function refreshInstallBar() {
+  const bar = $('installBar');
+  if (!bar) return;
+  // Not before a first match. Asking someone to install a game they have not played
+  // is exactly the behaviour that taught everyone to close these on sight.
+  const earned = typeof SAVE !== 'undefined' && SAVE && SAVE.matches >= 1;
+  bar.classList.toggle('hidden', !(canInstall() && earned && !installDismissed()));
+}
+
+async function doInstall() {
+  SFX.click();
+  if (installEvent) {
+    const e = installEvent;
+    installEvent = null;            // a prompt is single-use, accepted or not
+    e.prompt();
+    let outcome = 'dismissed';
+    try { ({ outcome } = await e.userChoice); } catch (err) { /* browser withdrew it */ }
+    if (outcome !== 'accepted') refreshInstallBar();
+    return;
+  }
+  if (isIOSSafari()) showInstallSteps();
+}
+
+function stepRow(n, text, iconName) {
+  const row = el('div', 'install-step');
+  row.appendChild(el('span', 'is-n', String(n)));
+  const body = el('span', 'is-text');
+  body.appendChild(document.createTextNode(text));
+  if (iconName) {
+    const ico = el('span', 'is-ico');
+    ico.innerHTML = icon(iconName);
+    body.appendChild(ico);
+  }
+  row.appendChild(body);
+  return row;
+}
+
+function showInstallSteps() {
+  const steps = $('installSteps');
+  steps.innerHTML = '';
+  steps.appendChild(stepRow(1, 'Tap the Share button at the bottom of Safari', 'share'));
+  steps.appendChild(stepRow(2, 'Scroll down and tap Add to Home Screen', 'plusbox'));
+  steps.appendChild(stepRow(3, 'Tap Add. War Prize lands on your home screen.', null));
+  $('installWrap').classList.remove('hidden');
+  SFX.panelOpen();
+}
+
+function closeInstallSteps() {
+  $('installWrap').classList.add('hidden');
+  SFX.panelClose();
+}
+
+addEventListener('beforeinstallprompt', e => {
+  // Stop the browser putting up its own bar; the game decides when to ask.
+  e.preventDefault();
+  installEvent = e;
+  refreshInstallBar();
+});
+
+addEventListener('appinstalled', () => {
+  installEvent = null;
+  $('installBar').classList.add('hidden');
+  SFX.unlockChime();
+  toast('Installed — look for War Prize on your home screen');
+});
+
 function renderMenu() {
   if (!SAVE) return;
   paintIcons();
+  refreshInstallBar();
   buildMenuBackdrop();
   renderModePicker();
   refreshChallenges();
@@ -519,6 +639,19 @@ function panelProfile() {
     const admin = el('button', 'ghost-btn', '🛡️ Manage Accounts');
     admin.onclick = () => { SFX.click(); ADMIN_LIST = null; openPanel('Manage Accounts', panelAdmin); };
     wrap.appendChild(admin);
+  }
+
+  // The strip on the menu can be dismissed for good, so there has to be a way back
+  // to this. Hidden entirely where the browser cannot install anything, rather than
+  // offering a button that would do nothing.
+  if (canInstall()) {
+    const inst = el('button', 'ghost-btn install-btn');
+    const ico = el('span', 'gb-ico');
+    ico.innerHTML = icon('install');
+    inst.appendChild(ico);
+    inst.appendChild(document.createTextNode('Install on this device'));
+    inst.onclick = doInstall;
+    wrap.appendChild(inst);
   }
 
   // The tutorial only ever runs itself once; this is the way back to it.
@@ -1320,6 +1453,11 @@ $('askPassNo').onclick = () => { SFX.back(); closeAskPass(null); };
 $('askPassInput').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); closeAskPass($('askPassInput').value); } };
 
 $('confirmYes').onclick = () => { SFX.click(); closeConfirm(true); };
+
+$('installGo').onclick = doInstall;
+$('installNo').onclick = () => { SFX.back(); dismissInstall(); };
+$('installClose').onclick = closeInstallSteps;
+$('installWrap').onclick = e => { if (e.target === $('installWrap')) closeInstallSteps(); };
 $('confirmNo').onclick = () => { SFX.back(); closeConfirm(false); };
 $('confirmWrap').onclick = e => { if (e.target === $('confirmWrap')) { SFX.back(); closeConfirm(false); } };
 

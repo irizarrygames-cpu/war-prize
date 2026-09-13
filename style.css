@@ -449,6 +449,109 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
   border-radius: 50%;
 }
 
+/* ---- add to home screen ---- */
+
+.install-bar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  /* Width has to be stated. Left to size itself the row came out wider than a phone
+     and pushed the dismiss button off the edge of the screen. */
+  box-sizing: border-box;
+  width: min(100% - 28px, 520px);
+  margin: 0 auto 10px;
+  padding: 7px 8px 7px 14px;
+  background: var(--panel);
+  border: 3px solid var(--outline);
+  border-radius: 999px;
+  box-shadow: 1px 4px 0 var(--outline);
+  animation: popIn 0.3s;
+}
+.install-bar .ib-ico { display: grid; place-items: center; color: var(--gold); flex: none; }
+.install-bar .ib-ico .ico-svg { width: 19px; height: 19px; display: block; }
+.ib-text {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  /* On a narrow phone the sentence gives way before the buttons do. min-width: 0 is
+     what actually allows that -- a flex item will not shrink below its own content
+     without it, overflow: hidden or no overflow: hidden. */
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ib-go {
+  flex: none;
+  background: var(--gold);
+  color: #3a2400;
+  border: 3px solid var(--outline);
+  border-radius: 999px;
+  padding: 5px 15px;
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  box-shadow: 1px 3px 0 var(--outline);
+  transition: transform 0.06s, box-shadow 0.06s;
+}
+.ib-go:active { transform: translateY(2px); box-shadow: 1px 1px 0 var(--outline); }
+.ib-no {
+  flex: none;
+  width: 26px; height: 26px;
+  background: none;
+  border: none;
+  color: var(--dim);
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  border-radius: 50%;
+}
+.ib-no:hover { color: var(--txt); }
+
+/* the iOS instructions */
+.install-box { width: min(94vw, 380px); }
+.install-steps { display: flex; flex-direction: column; gap: 11px; margin: 4px 0 2px; }
+.install-step { display: flex; align-items: center; gap: 10px; text-align: left; }
+.is-n {
+  flex: none;
+  width: 24px; height: 24px;
+  border-radius: 8px;
+  background: var(--gold);
+  color: #3a2400;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 900;
+}
+.is-text { font-size: 13px; font-weight: 800; line-height: 1.45; }
+/* The drawn button sits inline in the sentence, where the words point at it. */
+.is-ico {
+  display: inline-grid;
+  place-items: center;
+  vertical-align: -5px;
+  margin-left: 6px;
+  padding: 3px;
+  border-radius: 6px;
+  background: var(--panel-2);
+  border: 2px solid var(--outline);
+  color: var(--gold);
+}
+.is-ico .ico-svg { width: 15px; height: 15px; display: block; }
+
+.install-box .confirm-yes {
+  background: var(--gold);
+  color: #3a2400;
+  box-shadow: 1px 5px 0 var(--gold-dk), 0 5px 0 3px var(--outline);
+}
+
+.install-btn { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.install-btn .gb-ico { display: grid; place-items: center; color: var(--gold); }
+.install-btn .gb-ico .ico-svg { width: 17px; height: 17px; display: block; }
+
 .menu-foot {
   position: relative;
   z-index: 1;
@@ -465,6 +568,7 @@ body.arena-10, .arena-bg-10 { background: linear-gradient(180deg, #ffb01f 0 35%,
    and the rules are the least important thing on the screen. */
 @media (max-height: 656px) {
   .menu-foot { display: none; }
+  .install-bar { margin-bottom: 8px; padding: 5px 6px 5px 12px; }
   .sunburst { top: 30px; width: 420px; height: 420px; }
 }
 
