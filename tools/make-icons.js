@@ -112,68 +112,85 @@ const OUTLINE = hex('#0f1320');
 const NAVY = hex('#1b2333');
 const NAVY_2 = hex('#232c41');
 const INK = hex('#3a2400');      // the brown the game uses for text on gold
+const ORANGE = hex('#ff6b2c');   // the streak colour -- the game's hot end
+const EMBER  = hex('#272a35');   // burst rays: barely there, just enough to not be flat
+const FLAME_HOT = hex('#ffe07a');
 const GOLD = hex('#ffc93c');
 const WHITE = hex('#fdfdff');
 
+// A flame, on a 100x100 grid, walked clockwise from the tip. The notch on the lower
+// left is what stops it reading as a leaf or a teardrop.
+const FLAME = [
+  [50, 3], [60, 23], [72, 39], [79, 58], [75, 77], [60, 91],
+  [40, 91], [25, 77], [21, 58], [30, 39], [37, 52], [43, 33], [47, 17],
+];
+
+// Scaling a polygon about a point is not a true outline offset, but for a shape this
+// chunky it is indistinguishable and it costs one line.
+function grow(pts, k, ox, oy) {
+  return pts.map(([x, y]) => [ox + (x - ox) * k, oy + (y - oy) * k]);
+}
+
 function render(size, inset) {
   // inset leaves the safe area a maskable icon needs, so Android can crop it to a
-  // circle or a squircle without slicing the cards in half.
+  // circle or a squircle without slicing anything important off.
   const S = size;
   const pad = S * inset;
   const box = S - pad * 2;
   const cx = S / 2, cy = S / 2;
 
-  // One card carries the icon and the other is just depth behind it. The previous
-  // version gave two cards equal weight, stacked a number on top and put a sunburst
-  // behind the lot -- four things competing inside 48 pixels, which is why it read as
-  // clutter. One subject, one supporting shape, nothing else.
-  const cardW = box * 0.50, cardH = box * 0.70, radius = box * 0.08;
-  const lip = box * 0.058;
-
-  const backX = cx - box * 0.17, backY = cy - box * 0.01, backDeg = -16;
-  const frontX = cx + box * 0.055, frontY = cy + box * 0.015, frontDeg = 8;
-
   const shapes = [];
 
-  // the card behind: face down, blank, just enough of it showing to read as a second
-  shapes.push({ test: (x, y) => inCard(x, y, backX, backY, cardW + lip * 2, cardH + lip * 2, radius + lip, backDeg), c: OUTLINE });
-  shapes.push({ test: (x, y) => inCard(x, y, backX, backY, cardW, cardH, radius, backDeg), c: WHITE });
+  // Burst rays. Warm rather than blue this time, so the dark parts of the square are
+  // lit by the flame instead of sitting behind it.
+  for (let i = 0; i < 24; i += 2) {
+    shapes.push({ test: (x, y) => inRay(x, y, cx, cy * 1.04, i * 15, 15), c: EMBER });
+  }
 
-  // the prize card
-  shapes.push({ test: (x, y) => inCard(x, y, frontX, frontY, cardW + lip * 2, cardH + lip * 2, radius + lip, frontDeg), c: OUTLINE });
-  shapes.push({ test: (x, y) => inCard(x, y, frontX, frontY, cardW, cardH, radius, frontDeg), c: GOLD });
+  /* ---- the flame, sitting high so the card can overlap its base ---- */
+  const fW = box * 0.68, fH = box * 0.84;
+  const fx = cx, fy = cy - box * 0.13;
+  const toFlame = (x, y) => [((x - fx) / fW + 0.5) * 100, ((y - fy) / fH + 0.5) * 100];
 
-  // A crown on it, which is what the whole game is about: this is the card you win.
-  // The same shape the royal card back uses, on the game's own 24-unit grid, drawn in
-  // the card's frame so it leans with the card.
-  const CROWN = [[2.4, 7.4], [7, 12], [12, 3.4], [17, 12], [21.6, 7.4], [21.6, 18.8], [2.4, 18.8]];
-  const g = cardW * 0.78 / 24;                    // grid units to pixels
-  shapes.push({
-    c: INK,
-    test: (x, y) => {
-      const [lx, ly] = toLocal(x, y, frontX, frontY, frontDeg);
-      // centre the 24x24 grid on the card, nudged up so the band below sits inside it
-      const gx = lx / g + 12, gy = ly / g + 11.2;
-      return inPoly(gx, gy, CROWN) || inBar(gx, gy, 12, 20.9, 19.2, 2.6, 0);
-    },
-  });
+  const outer = grow(FLAME, 1.13, 50, 50);
+  shapes.push({ test: (x, y) => { const [u, v] = toFlame(x, y); return inPoly(u, v, outer); }, c: OUTLINE });
+  shapes.push({ test: (x, y) => { const [u, v] = toFlame(x, y); return inPoly(u, v, FLAME); }, c: ORANGE });
+
+  // the hot core, pulled down and in -- a flame is brightest low and centre
+  const core = grow(FLAME, 0.52, 50, 74);
+  shapes.push({ test: (x, y) => { const [u, v] = toFlame(x, y); return inPoly(u, v, core); }, c: GOLD });
+  const heart = grow(FLAME, 0.24, 50, 80);
+  shapes.push({ test: (x, y) => { const [u, v] = toFlame(x, y); return inPoly(u, v, heart); }, c: FLAME_HOT });
+
+  /* ---- the cards, low and overlapping the flame's base ---- */
+  const cardW = box * 0.33, cardH = box * 0.46, radius = box * 0.055;
+  const lip = box * 0.045;
+  const cardY = cy + box * 0.29;
+
+  const back = { x: cx - box * 0.13, y: cardY - box * 0.012, deg: -19 };
+  const front = { x: cx + box * 0.10, y: cardY, deg: 15 };
+
+  shapes.push({ test: (x, y) => inCard(x, y, back.x, back.y, cardW + lip * 2, cardH + lip * 2, radius + lip, back.deg), c: OUTLINE });
+  shapes.push({ test: (x, y) => inCard(x, y, back.x, back.y, cardW, cardH, radius, back.deg), c: WHITE });
+  shapes.push({ test: (x, y) => inCard(x, y, front.x, front.y, cardW + lip * 2, cardH + lip * 2, radius + lip, front.deg), c: OUTLINE });
+  shapes.push({ test: (x, y) => inCard(x, y, front.x, front.y, cardW, cardH, radius, front.deg), c: GOLD });
 
   const out = Buffer.alloc(S * S * 4);
   const SS = 3;                     // supersampling, so the edges are not jagged
   for (let y = 0; y < S; y++) {
     for (let x = 0; x < S; x++) {
-      let r = 0, gg = 0, b = 0;
+      let r = 0, g = 0, b = 0;
       for (let sy = 0; sy < SS; sy++) {
         for (let sx = 0; sx < SS; sx++) {
           const px = x + (sx + 0.5) / SS, py = y + (sy + 0.5) / SS;
           let col = NAVY;
           for (const sh of shapes) if (sh.test(px, py)) col = sh.c;
-          r += col[0]; gg += col[1]; b += col[2];
+          r += col[0]; g += col[1]; b += col[2];
         }
       }
       const n = SS * SS, i = (y * S + x) * 4;
       out[i] = Math.round(r / n);
-      out[i + 1] = Math.round(gg / n);
+      out[i + 1] = Math.round(g / n);
       out[i + 2] = Math.round(b / n);
       out[i + 3] = 255;
     }
